@@ -10,6 +10,14 @@ func New(storage storage) *Service {
 	}
 }
 
-func (s *Service) Put(typeName, name string, value float64) error {
+func (s *Service) IncrementCounter(counterName string, value int64) error {
+	s.storage.IncrementCounter(counterName, value)
 
+	return nil
+}
+
+func (s *Service) UpdateGauge(counterName string, value float64) error {
+	s.storage.UpdateGauge(counterName, value)
+
+	return nil
 }

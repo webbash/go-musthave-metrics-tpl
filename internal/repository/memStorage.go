@@ -1,17 +1,21 @@
 package repository
 
-import models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
-
 type MemStorage struct {
-	metrics map[string]map[string]models.Metrics
+	counter map[string]int64
+	gauge   map[string]float64
 }
 
 func NewMemStorage() *MemStorage {
 	return &MemStorage{
-		metrics: make(map[string]map[string]models.Metrics),
+		counter: make(map[string]int64),
+		gauge:   make(map[string]float64),
 	}
 }
 
-func (m *MemStorage) Put(metrics models.Metrics) {
-	m.metrics[metrics.MType][metrics.ID] = metrics
+func (m *MemStorage) IncrementCounter(metricName string, value int64) {
+	m.counter[metricName] += value
+}
+
+func (m *MemStorage) UpdateGauge(metricName string, value float64) {
+	m.gauge[metricName] = value
 }
