@@ -66,10 +66,9 @@ func TestHandler_ServeHTTP(t *testing.T) {
 			response := httptest.NewRecorder()
 			mux.ServeHTTP(response, request)
 			res := response.Result()
+			defer res.Body.Close()
 
-			assert.Equal(t, tt.args.want, response.Result().StatusCode)
-
-			res.Body.Close()
+			assert.Equal(t, tt.args.want, res.StatusCode)
 		})
 	}
 }
