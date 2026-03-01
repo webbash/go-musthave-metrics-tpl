@@ -11,7 +11,7 @@ import (
 
 func main() {
 	storage := repository.NewMemStorage()
-	service := update.New(storage)
+	service := update.NewService(storage)
 	updateHandlerConcrete := updateHandler.NewHandler(service)
 
 	mux := http.NewServeMux()
