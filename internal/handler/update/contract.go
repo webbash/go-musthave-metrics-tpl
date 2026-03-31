@@ -1,6 +1,6 @@
 package update
 
-type service interface {
-	IncrementCounter(counterName string, value int64) error
-	UpdateGauge(counterName string, value float64) error
+type storage interface {
+	IncrementCounter(metricName string, value int64)
+	UpdateGauge(metricName string, value float64)
 }

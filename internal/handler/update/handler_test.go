@@ -1,13 +1,14 @@
 package update
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/repository"
-	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service/update"
 )
 
 func TestHandler_ServeHTTP(t *testing.T) {
@@ -52,23 +53,32 @@ func TestHandler_ServeHTTP(t *testing.T) {
 				want:   http.StatusBadRequest,
 			},
 		},
+		{
+			name: "Unknown metric type",
+			args: args{
+				url:    "/update/unknown/test/10",
+				method: http.MethodPost,
+				want:   http.StatusNotImplemented,
+			},
+		},
 	}
 
 	storage := repository.NewMemStorage()
-	handler := NewHandler(update.NewService(storage))
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /update/{metricType}/{metricName}/{metricValue}", handler.ServeHTTP)
+	handler := NewHandler(storage)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			request := httptest.NewRequest(tt.args.method, tt.args.url, nil)
-			response := httptest.NewRecorder()
-			mux.ServeHTTP(response, request)
-			res := response.Result()
-			defer res.Body.Close()
+			r := chi.NewRouter()
+			r.Post("/update/{metricType}/{metricName}/{metricValue}", handler.ServeHTTP)
+			req := httptest.NewRequest(tt.args.method, tt.args.url, nil)
+			recorder := httptest.NewRecorder()
+			r.ServeHTTP(recorder, req)
 
-			assert.Equal(t, tt.args.want, res.StatusCode)
+			assert.Equal(t, tt.args.want, recorder.Code)
+
+			if recorder.Code != tt.args.want {
+				fmt.Printf("Error body: %s\n", recorder.Body.String())
+			}
 		})
 	}
 }

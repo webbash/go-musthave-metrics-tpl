@@ -1,4 +1,4 @@
-package update
+package get_value
 
 import (
 	"net/http"
@@ -21,28 +21,28 @@ func NewHandler(storage storage) *Handler {
 func (h Handler) ServeHTTP(res http.ResponseWriter, r *http.Request) {
 	mType := chi.URLParam(r, "metricType")
 	mName := chi.URLParam(r, "metricName")
-	mValue := chi.URLParam(r, "metricValue")
 
 	switch mType {
 	case models.Counter:
-		intVal, err := strconv.ParseInt(mValue, 10, 64)
-		if err != nil {
-			http.Error(res, "error parse int", http.StatusBadRequest)
+		intVal, ok := h.storage.GetCounter(mName)
+		if !ok {
+			http.Error(res, "metric not found", http.StatusNotFound)
 			return
 		}
-
-		h.storage.IncrementCounter(mName, intVal)
+		res.WriteHeader(http.StatusOK)
+		res.Write([]byte(strconv.FormatInt(intVal, 10)))
+		return
 	case models.Gauge:
-		floatVal, err := strconv.ParseFloat(mValue, 64)
-		if err != nil {
-			http.Error(res, "error parse float", http.StatusBadRequest)
+		floatVal, ok := h.storage.GetGauge(mName)
+		if !ok {
+			http.Error(res, "metric not found", http.StatusNotFound)
 			return
 		}
-		h.storage.UpdateGauge(mName, floatVal)
+		res.WriteHeader(http.StatusOK)
+		res.Write([]byte(strconv.FormatFloat(floatVal, 'f', -1, 64)))
+		return
 	default:
-		http.Error(res, "unknown metric type", http.StatusNotImplemented)
+		http.Error(res, "unknown metric type", http.StatusBadRequest)
 		return
 	}
-
-	res.WriteHeader(http.StatusOK)
 }
