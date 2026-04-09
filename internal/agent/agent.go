@@ -69,7 +69,7 @@ func (a *Agent) ReadMetrics() {
 
 func (a *Agent) SendMetrics() {
 	for metricName, value := range a.gaugeMetrics {
-		url := fmt.Sprintf("%s/update/%s/%s/%v", a.basicURL, models.Gauge, metricName, value)
+		url := fmt.Sprintf("http://%s/update/%s/%s/%v", a.basicURL, models.Gauge, metricName, value)
 		a.sendPostRequest(url)
 	}
 

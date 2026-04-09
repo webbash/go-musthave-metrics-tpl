@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	basicURL := flag.String("a", "http://localhost:8080", "agent endpoint url")
+	basicURL := flag.String("a", "localhost:8080", "agent endpoint url")
 	pollInterval := flag.Int("p", 2, "poll interval in seconds")
 	reportInterval := flag.Int("r", 10, "report interval in seconds")
 
