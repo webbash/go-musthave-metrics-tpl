@@ -1,6 +1,6 @@
 module github.com/webbash/go-musthave-metrics-tpl.git
 
-go 1.24.13
+go 1.25.0
 
 require (
 	github.com/go-chi/chi/v5 v5.2.5
