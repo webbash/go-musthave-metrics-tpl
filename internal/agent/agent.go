@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net/http"
 	"runtime"
+	"strings"
 	"time"
 
 	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
@@ -22,13 +23,18 @@ type Agent struct {
 }
 
 func NewAgent(basicURL string, pollInterval, reportInterval time.Duration, httpClient *http.Client) *Agent {
+	addr := basicURL
+	if !strings.HasPrefix(addr, "http://") && !strings.HasPrefix(addr, "https://") {
+		addr = "http://" + addr
+	}
+
 	return &Agent{
 		PollInterval:   pollInterval,
 		ReportInterval: reportInterval,
 		gaugeMetrics:   make(map[string]float64),
 		counterMetrics: make(map[string]int64),
 		httpClient:     httpClient,
-		basicURL:       basicURL,
+		basicURL:       addr,
 	}
 }
 
@@ -69,7 +75,7 @@ func (a *Agent) ReadMetrics() {
 
 func (a *Agent) SendMetrics() {
 	for metricName, value := range a.gaugeMetrics {
-		url := fmt.Sprintf("http://%s/update/%s/%s/%v", a.basicURL, models.Gauge, metricName, value)
+		url := fmt.Sprintf("%s/update/%s/%s/%v", a.basicURL, models.Gauge, metricName, value)
 		a.sendPostRequest(url)
 	}
 
