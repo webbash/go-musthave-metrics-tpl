@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"net/http"
 	"time"
 
@@ -8,7 +9,12 @@ import (
 )
 
 func main() {
-	agentClient := agent.NewAgent("http://localhost:8080", 2*time.Second, 10*time.Second, &http.Client{})
+	basicURL := flag.String("a", "localhost:8080", "agent endpoint url")
+	pollInterval := flag.Int("p", 2, "poll interval in seconds")
+	reportInterval := flag.Int("r", 10, "report interval in seconds")
+	agentClient := agent.NewAgent(*basicURL, time.Duration(*pollInterval)*time.Second, time.Duration(*reportInterval)*time.Second, &http.Client{})
+
+	flag.Parse()
 
 	go func() {
 		for {

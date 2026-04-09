@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"net/http"
 
@@ -12,6 +13,10 @@ import (
 )
 
 func main() {
+	addr := flag.String("a", "localhost:8080", "server endpoint")
+
+	flag.Parse()
+
 	r := chi.NewRouter()
 	storage := repository.NewMemStorage()
 	updateHandlerConcrete := update_handler.NewHandler(storage)
@@ -22,5 +27,5 @@ func main() {
 	r.Get("/value/{metricType}/{metricName}", getValueHandlerConcrete.ServeHTTP)
 	r.Post("/update/{metricType}/{metricName}/{metricValue}", updateHandlerConcrete.ServeHTTP)
 
-	log.Fatal(http.ListenAndServe(":8080", r))
+	log.Fatal(http.ListenAndServe(*addr, r))
 }
