@@ -18,14 +18,24 @@ func main() {
 	agentClient := agent.NewAgent(*basicURL, time.Duration(*pollInterval)*time.Second, time.Duration(*reportInterval)*time.Second, &http.Client{})
 
 	go func() {
+		pollTicker := time.NewTicker(agentClient.PollInterval)
+		defer pollTicker.Stop()
+
 		for {
-			time.Sleep(agentClient.PollInterval)
-			agentClient.ReadMetrics()
+			select {
+			case <-pollTicker.C:
+				agentClient.ReadMetrics()
+			}
 		}
 	}()
 
+	reportTicker := time.NewTicker(agentClient.ReportInterval)
+	defer reportTicker.Stop()
+
 	for {
-		time.Sleep(agentClient.ReportInterval)
-		agentClient.SendMetrics()
+		select {
+		case <-reportTicker.C:
+			agentClient.SendMetrics()
+		}
 	}
 }
