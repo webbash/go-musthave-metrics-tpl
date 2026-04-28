@@ -1,6 +1,7 @@
 package update
 
-type storage interface {
-	IncrementCounter(metricName string, value int64)
-	UpdateGauge(metricName string, value float64)
+import "context"
+
+type metricsService interface {
+	Update(ctx context.Context, metricType, metricName, metricValue string) error
 }

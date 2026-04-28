@@ -1,6 +1,9 @@
 package get_value_list
 
-type storage interface {
-	GetAllGauges() map[string]float64
-	GetAllCounters() map[string]int64
+import (
+	"context"
+)
+
+type metricsService interface {
+	GetAll(ctx context.Context) (map[string]float64, map[string]int64)
 }

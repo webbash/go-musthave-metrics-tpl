@@ -6,12 +6,12 @@ import (
 )
 
 type Handler struct {
-	storage storage
+	service metricsService
 }
 
-func NewHandler(storage storage) *Handler {
+func NewHandler(service metricsService) *Handler {
 	return &Handler{
-		storage: storage,
+		service: service,
 	}
 }
 
@@ -19,12 +19,13 @@ func (h Handler) ServeHTTP(res http.ResponseWriter, r *http.Request) {
 	res.Header().Set("Content-Type", "text/html")
 
 	html := "<html><body><h1>Metrics List</h1><ul>"
+	gauges, counters := h.service.GetAll(r.Context())
 
-	for name, value := range h.storage.GetAllGauges() {
+	for name, value := range gauges {
 		html += fmt.Sprintf("<li>%s: %g</li>", name, value)
 	}
 
-	for name, value := range h.storage.GetAllCounters() {
+	for name, value := range counters {
 		html += fmt.Sprintf("<li>%s: %d</li>", name, value)
 	}
 

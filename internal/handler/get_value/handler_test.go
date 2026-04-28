@@ -1,6 +1,7 @@
 package get_value
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -10,14 +11,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/repository"
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
 )
 
 func TestHandler_ServeHTTP(t *testing.T) {
 	storage := repository.NewMemStorage()
-	storage.UpdateGauge("test_gauge", 10.6)
-	storage.IncrementCounter("test_counter", 10)
+	ctx := context.Background()
+	storage.UpdateGauge(ctx, "test_gauge", 10.6)
+	storage.IncrementCounter(ctx, "test_counter", 10)
 
-	handler := NewHandler(storage)
+	metricsService := service.NewMetricsService(storage)
+	handler := NewHandler(metricsService)
 	r := chi.NewRouter()
 	r.Get("/value/{metricType}/{metricName}", handler.ServeHTTP)
 

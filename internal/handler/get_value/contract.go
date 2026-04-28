@@ -1,6 +1,7 @@
 package get_value
 
-type storage interface {
-	GetCounter(metricName string) (int64, bool)
-	GetGauge(metricName string) (float64, bool)
+import "context"
+
+type metricsService interface {
+	Get(ctx context.Context, metricType, metricName string) (string, error)
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/get_value_list"
 	update_handler "github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/update"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/repository"
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
 )
 
 func main() {
@@ -24,9 +25,10 @@ func main() {
 
 	r := chi.NewRouter()
 	storage := repository.NewMemStorage()
-	updateHandlerConcrete := update_handler.NewHandler(storage)
-	getValueHandlerConcrete := get_value.NewHandler(storage)
-	getValueListHandlerConcrete := get_value_list.NewHandler(storage)
+	metricsService := service.NewMetricsService(storage)
+	updateHandlerConcrete := update_handler.NewHandler(metricsService)
+	getValueHandlerConcrete := get_value.NewHandler(metricsService)
+	getValueListHandlerConcrete := get_value_list.NewHandler(metricsService)
 
 	r.Get("/", getValueListHandlerConcrete.ServeHTTP)
 	r.Get("/value/{metricType}/{metricName}", getValueHandlerConcrete.ServeHTTP)

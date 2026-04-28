@@ -1,20 +1,20 @@
 package update
 
 import (
+	"errors"
 	"net/http"
-	"strconv"
 
 	"github.com/go-chi/chi/v5"
-	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
 )
 
 type Handler struct {
-	storage storage
+	service metricsService
 }
 
-func NewHandler(storage storage) *Handler {
+func NewHandler(service metricsService) *Handler {
 	return &Handler{
-		storage: storage,
+		service: service,
 	}
 }
 
@@ -23,23 +23,17 @@ func (h Handler) ServeHTTP(res http.ResponseWriter, r *http.Request) {
 	mName := chi.URLParam(r, "metricName")
 	mValue := chi.URLParam(r, "metricValue")
 
-	switch mType {
-	case models.Counter:
-		intVal, err := strconv.ParseInt(mValue, 10, 64)
-		if err != nil {
-			http.Error(res, "error parse int", http.StatusBadRequest)
+	if err := h.service.Update(r.Context(), mType, mName, mValue); err != nil {
+		if errors.Is(err, service.ErrUnknownMetricType) {
+			http.Error(res, "unknown metric type", http.StatusNotImplemented)
 			return
 		}
 
-		h.storage.IncrementCounter(mName, intVal)
-	case models.Gauge:
-		floatVal, err := strconv.ParseFloat(mValue, 64)
-		if err != nil {
-			http.Error(res, "error parse float", http.StatusBadRequest)
+		if errors.Is(err, service.ErrInvalidMetricValue) {
+			http.Error(res, "error parse metric value", http.StatusBadRequest)
 			return
 		}
-		h.storage.UpdateGauge(mName, floatVal)
-	default:
+
 		http.Error(res, "unknown metric type", http.StatusNotImplemented)
 		return
 	}
