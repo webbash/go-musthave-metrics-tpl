@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -35,7 +36,9 @@ func main() {
 	for {
 		select {
 		case <-reportTicker.C:
-			agentClient.SendMetrics()
+			if err := agentClient.SendMetrics(); err != nil {
+				slog.Error("failed to send metrics", "error", err)
+			}
 		}
 	}
 }
