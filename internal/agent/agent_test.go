@@ -40,7 +40,8 @@ func TestAgent_UpdateMetrics(t *testing.T) {
 
 	agent := NewAgent(ts.URL, 1*time.Second, 1*time.Second, client)
 	agent.ReadMetrics()
-	agent.SendMetrics()
+	err := agent.SendMetrics()
 
+	assert.NoError(t, err)
 	assert.Equal(t, len(metricsList), counter)
 }

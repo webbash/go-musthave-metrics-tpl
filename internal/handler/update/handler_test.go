@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/repository"
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
 )
 
 func TestHandler_ServeHTTP(t *testing.T) {
@@ -64,7 +65,8 @@ func TestHandler_ServeHTTP(t *testing.T) {
 	}
 
 	storage := repository.NewMemStorage()
-	handler := NewHandler(storage)
+	metricsService := service.NewMetricsService(storage)
+	handler := NewHandler(metricsService)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

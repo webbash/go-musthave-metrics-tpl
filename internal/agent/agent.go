@@ -1,11 +1,12 @@
 package agent
 
 import (
+	"errors"
 	"fmt"
-	"log"
 	"math/rand"
 	"net/http"
 	"runtime"
+	"strings"
 	"time"
 
 	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
@@ -22,13 +23,18 @@ type Agent struct {
 }
 
 func NewAgent(basicURL string, pollInterval, reportInterval time.Duration, httpClient *http.Client) *Agent {
+	addr := basicURL
+	if !strings.HasPrefix(addr, "http://") && !strings.HasPrefix(addr, "https://") {
+		addr = "http://" + addr
+	}
+
 	return &Agent{
 		PollInterval:   pollInterval,
 		ReportInterval: reportInterval,
 		gaugeMetrics:   make(map[string]float64),
 		counterMetrics: make(map[string]int64),
 		httpClient:     httpClient,
-		basicURL:       basicURL,
+		basicURL:       addr,
 	}
 }
 
@@ -67,32 +73,47 @@ func (a *Agent) ReadMetrics() {
 	a.counterMetrics["PollCount"] += 1
 }
 
-func (a *Agent) SendMetrics() {
+func (a *Agent) SendMetrics() error {
+	var resultErr error
+
 	for metricName, value := range a.gaugeMetrics {
 		url := fmt.Sprintf("%s/update/%s/%s/%v", a.basicURL, models.Gauge, metricName, value)
-		a.sendPostRequest(url)
+		if err := a.sendPostRequest(url); err != nil {
+			resultErr = errors.Join(resultErr, fmt.Errorf("send gauge metric %s: %w", metricName, err))
+		}
 	}
 
 	for metricName, value := range a.counterMetrics {
 		url := fmt.Sprintf("%s/update/%s/%s/%v", a.basicURL, models.Counter, metricName, value)
-		a.sendPostRequest(url)
+		if err := a.sendPostRequest(url); err != nil {
+			resultErr = errors.Join(resultErr, fmt.Errorf("send counter metric %s: %w", metricName, err))
+		}
 	}
+
+	return resultErr
 }
 
-func (a *Agent) sendPostRequest(url string) {
+func (a *Agent) sendPostRequest(url string) error {
 	request, err := http.NewRequest(http.MethodPost, url, http.NoBody)
 	if err != nil {
-		log.Println(fmt.Errorf("failed to create request: %v", err))
+		return fmt.Errorf("create request: %w", err)
 	}
+
 	request.Header.Set("Content-Type", "text/plain")
+
 	response, err := a.httpClient.Do(request)
-
 	if err != nil {
-		log.Println(fmt.Errorf("failed to send request: %v", err))
+		return fmt.Errorf("send request: %w", err)
+	}
+	var resultErr error
+
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		resultErr = fmt.Errorf("unexpected response status: %s", response.Status)
 	}
 
-	err = response.Body.Close()
-	if err != nil {
-		log.Println(fmt.Errorf("failed to close response body: %v", err))
+	if err := response.Body.Close(); err != nil {
+		resultErr = errors.Join(resultErr, fmt.Errorf("close response body: %w", err))
 	}
+
+	return resultErr
 }
