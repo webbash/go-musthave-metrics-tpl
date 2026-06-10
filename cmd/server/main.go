@@ -20,8 +20,13 @@ import (
 )
 
 func main() {
-	addr := flag.String("a", "localhost:8080", "server endpoint")
+	var addr string
+	flag.StringVar(&addr, "a", "localhost:8080", "server endpoint")
 	flag.Parse()
+
+	if envAddress := os.Getenv("ADDRESS"); envAddress != "" {
+		addr = envAddress
+	}
 
 	r := chi.NewRouter()
 	storage := repository.NewMemStorage()
@@ -35,7 +40,7 @@ func main() {
 	r.Post("/update/{metricType}/{metricName}/{metricValue}", updateHandlerConcrete.ServeHTTP)
 
 	srv := &http.Server{
-		Addr:         *addr,
+		Addr:         addr,
 		Handler:      r,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
@@ -44,7 +49,7 @@ func main() {
 
 	// Graceful start
 	go func() {
-		slog.Info("server starting", "addr", *addr)
+		slog.Info("server starting", "addr", addr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("server failed", "error", err)
 			os.Exit(1)
