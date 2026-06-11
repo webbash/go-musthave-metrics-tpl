@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -17,6 +16,7 @@ import (
 	update_handler "github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/update"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/repository"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -39,6 +39,14 @@ func main() {
 	r.Get("/value/{metricType}/{metricName}", getValueHandlerConcrete.ServeHTTP)
 	r.Post("/update/{metricType}/{metricName}/{metricValue}", updateHandlerConcrete.ServeHTTP)
 
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		panic(err)
+	}
+	defer logger.Sync()
+
+	sugar := *logger.Sugar()
+
 	srv := &http.Server{
 		Addr:         addr,
 		Handler:      r,
@@ -49,9 +57,9 @@ func main() {
 
 	// Graceful start
 	go func() {
-		slog.Info("server starting", "addr", addr)
+		sugar.Infow("starting server", zap.String("addr", addr))
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			slog.Error("server failed", "error", err)
+			sugar.Infow("server closed", zap.Error(err))
 			os.Exit(1)
 		}
 	}()
@@ -60,16 +68,16 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-	slog.Info("shutting down server")
+	sugar.Infow("shutting down server")
 
 	// Grace period для завершения текущих запросов
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		slog.Error("server forced to shutdown", "error", err)
+		sugar.Errorw("server forced to shutdown", zap.Error(err))
 		os.Exit(1)
 	}
 
-	slog.Info("server stopped gracefully")
+	sugar.Infow("server stopped gracefully")
 }
