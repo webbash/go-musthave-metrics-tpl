@@ -12,6 +12,7 @@ var (
 	ErrInvalidMetricValue = errors.New("invalid metric value")
 	ErrMetricNotFound     = errors.New("metric not found")
 	ErrUnknownMetricType  = errors.New("unknown metric type")
+	ErrInvalidMetric      = errors.New("metric is invalid")
 )
 
 type MetricsRepository interface {
@@ -56,8 +57,57 @@ func (s *MetricsService) Update(ctx context.Context, metricType, metricName, met
 	}
 }
 
-func (s *MetricsService) UpdateMetric(ctx context.Context) map[string]float64 {
-	// TODO ...
+func (s *MetricsService) UpdateMetric(ctx context.Context, metric models.Metrics) (models.Metrics, error) {
+	switch metric.MType {
+	case models.Counter:
+		if metric.Delta == nil {
+			return models.Metrics{}, ErrInvalidMetricValue
+		}
+
+		s.repository.IncrementCounter(ctx, metric.ID, *metric.Delta)
+		counterValue, _ := s.repository.GetCounter(ctx, metric.ID)
+
+		metric.Delta = &counterValue
+
+		return metric, nil
+	case models.Gauge:
+		if metric.Value == nil {
+			return models.Metrics{}, ErrInvalidMetricValue
+		}
+
+		s.repository.UpdateGauge(ctx, metric.ID, *metric.Value)
+
+		return metric, nil
+	default:
+		return models.Metrics{}, ErrUnknownMetricType
+	}
+}
+
+func (s *MetricsService) GetMetric(ctx context.Context, metric models.Metrics) (models.Metrics, error) {
+	if metric.ID == "" || metric.MType == "" {
+		return models.Metrics{}, ErrInvalidMetric
+	}
+
+	switch metric.MType {
+	case models.Gauge:
+		value, ok := s.repository.GetGauge(ctx, metric.ID)
+		if !ok {
+			return models.Metrics{}, ErrMetricNotFound
+		}
+
+		metric.Value = &value
+		return metric, nil
+
+	case models.Counter:
+		value, ok := s.repository.GetCounter(ctx, metric.ID)
+		if !ok {
+			return models.Metrics{}, ErrMetricNotFound
+		}
+		metric.Delta = &value
+		return metric, nil
+	default:
+		return models.Metrics{}, ErrUnknownMetricType
+	}
 }
 
 func (s *MetricsService) Get(ctx context.Context, metricType, metricName string) (string, error) {
