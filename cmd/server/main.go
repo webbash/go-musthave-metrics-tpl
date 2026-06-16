@@ -53,7 +53,7 @@ func main() {
 	r.Get("/value/{metricType}/{metricName}", getValueH.ServeHTTP)
 	r.Post("/update/{metricType}/{metricName}/{metricValue}", updateH.ServeHTTP)
 	r.Post("/update", updateMetricH.ServeHTTP)
-	r.Get("/value", getValueMetricH.ServeHTTP)
+	r.Post("/value", getValueMetricH.ServeHTTP)
 
 	srv := &http.Server{
 		Addr:         addr,
