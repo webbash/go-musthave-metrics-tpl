@@ -56,6 +56,10 @@ func (s *MetricsService) Update(ctx context.Context, metricType, metricName, met
 	}
 }
 
+func (s *MetricsService) UpdateMetric(ctx context.Context) map[string]float64 {
+	// TODO ...
+}
+
 func (s *MetricsService) Get(ctx context.Context, metricType, metricName string) (string, error) {
 	switch metricType {
 	case models.Counter:

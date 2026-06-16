@@ -14,6 +14,7 @@ import (
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/get_value"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/get_value_list"
 	update_handler "github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/update"
+	update_handler_v2 "github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/update_v2"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/repository"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
 	"go.uber.org/zap"
@@ -32,6 +33,7 @@ func main() {
 	storage := repository.NewMemStorage()
 	metricsService := service.NewMetricsService(storage)
 	updateH := update_handler.NewHandler(metricsService)
+	updateHV2 := update_handler_v2.NewHandler(metricsService)
 	getValueH := get_value.NewHandler(metricsService)
 	getValueListH := get_value_list.NewHandler(metricsService)
 
@@ -48,6 +50,7 @@ func main() {
 	r.Get("/", getValueListH.ServeHTTP)
 	r.Get("/value/{metricType}/{metricName}", getValueH.ServeHTTP)
 	r.Post("/update/{metricType}/{metricName}/{metricValue}", updateH.ServeHTTP)
+	r.Post("/update", updateHV2.ServeHTTP)
 
 	srv := &http.Server{
 		Addr:         addr,
