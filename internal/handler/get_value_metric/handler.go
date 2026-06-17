@@ -3,8 +3,9 @@ package get_value_metric
 import (
 	"bytes"
 	"encoding/json"
-	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
 	"net/http"
+
+	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
 )
 
 type Handler struct {
@@ -34,13 +35,13 @@ func (h Handler) ServeHTTP(res http.ResponseWriter, r *http.Request) {
 	}
 
 	if metric.MType == "" || metric.ID == "" {
-		http.Error(res, "MType and Value are required", http.StatusBadRequest)
+		http.Error(res, "MType and Value are required", http.StatusNotFound)
 		return
 	}
 
 	metric, err = h.service.GetMetric(r.Context(), metric)
 	if err != nil {
-		http.Error(res, err.Error(), http.StatusBadRequest)
+		http.Error(res, err.Error(), http.StatusNotFound)
 		return
 	}
 
