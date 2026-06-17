@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -77,15 +79,27 @@ func (a *Agent) SendMetrics() error {
 	var resultErr error
 
 	for metricName, value := range a.gaugeMetrics {
-		url := fmt.Sprintf("%s/update/%s/%s/%v", a.basicURL, models.Gauge, metricName, value)
-		if err := a.sendPostRequest(url); err != nil {
+		metric := models.Metrics{
+			ID:    metricName,
+			MType: models.Gauge,
+			Value: &value,
+		}
+
+		err := a.sendUpdateMetric(metric)
+
+		if err != nil {
 			resultErr = errors.Join(resultErr, fmt.Errorf("send gauge metric %s: %w", metricName, err))
 		}
 	}
 
 	for metricName, value := range a.counterMetrics {
-		url := fmt.Sprintf("%s/update/%s/%s/%v", a.basicURL, models.Counter, metricName, value)
-		if err := a.sendPostRequest(url); err != nil {
+		metric := models.Metrics{
+			ID:    metricName,
+			MType: models.Counter,
+			Delta: &value,
+		}
+		err := a.sendUpdateMetric(metric)
+		if err != nil {
 			resultErr = errors.Join(resultErr, fmt.Errorf("send counter metric %s: %w", metricName, err))
 		}
 	}
@@ -93,27 +107,28 @@ func (a *Agent) SendMetrics() error {
 	return resultErr
 }
 
-func (a *Agent) sendPostRequest(url string) error {
-	request, err := http.NewRequest(http.MethodPost, url, http.NoBody)
+func (a *Agent) sendUpdateMetric(metric models.Metrics) error {
+	body, err := json.Marshal(metric)
+	if err != nil {
+		return fmt.Errorf("marshal metric: %w", err)
+	}
+	url := fmt.Sprintf("%s/update", a.basicURL)
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
+	req.Header.Set("Content-Type", "application/json")
 
-	request.Header.Set("Content-Type", "text/plain")
-
-	response, err := a.httpClient.Do(request)
+	resp, err := a.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("send request: %w", err)
-	}
-	var resultErr error
-
-	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		resultErr = fmt.Errorf("unexpected response status: %s", response.Status)
+		return fmt.Errorf("send update: %w", err)
 	}
 
-	if err := response.Body.Close(); err != nil {
-		resultErr = errors.Join(resultErr, fmt.Errorf("close response body: %w", err))
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("send update: %d", resp.StatusCode)
 	}
 
-	return resultErr
+	return nil
 }
