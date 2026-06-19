@@ -63,19 +63,7 @@ func (cw *compressWriter) Header() http.Header {
 }
 
 func (cw *compressWriter) Write(b []byte) (int, error) {
-	if !cw.initialized {
-		contentType := cw.Header().Get("Content-Type")
-
-		cw.compressed =
-			strings.Contains(contentType, "application/json") ||
-				strings.Contains(contentType, "text/html")
-
-		if cw.compressed {
-			cw.Header().Set("Content-Encoding", "gzip")
-		}
-
-		cw.initialized = true
-	}
+	cw.initCompression()
 
 	if cw.compressed {
 		return cw.zw.Write(b)
@@ -85,10 +73,15 @@ func (cw *compressWriter) Write(b []byte) (int, error) {
 }
 
 func (cw *compressWriter) WriteHeader(statusCode int) {
+	cw.initCompression()
 	cw.w.WriteHeader(statusCode)
 }
 
 func (cw *compressWriter) Close() error {
+	if !cw.compressed {
+		return nil
+	}
+
 	return cw.zw.Close()
 }
 
@@ -118,4 +111,22 @@ func (c *compressReader) Close() error {
 		return err
 	}
 	return c.zr.Close()
+}
+
+func (cw *compressWriter) initCompression() {
+	if cw.initialized {
+		return
+	}
+
+	contentType := cw.Header().Get("Content-Type")
+
+	cw.compressed =
+		strings.Contains(contentType, "application/json") ||
+			strings.Contains(contentType, "text/html")
+
+	if cw.compressed {
+		cw.Header().Set("Content-Encoding", "gzip")
+	}
+
+	cw.initialized = true
 }
