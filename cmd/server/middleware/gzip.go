@@ -48,8 +48,10 @@ func GzipMiddleware() func(http.Handler) http.Handler {
 }
 
 type compressWriter struct {
-	w  http.ResponseWriter
-	zw *gzip.Writer
+	w           http.ResponseWriter
+	zw          *gzip.Writer
+	initialized bool
+	compressed  bool
 }
 
 func newCompressWriter(w http.ResponseWriter) *compressWriter {
@@ -61,11 +63,21 @@ func (cw *compressWriter) Header() http.Header {
 }
 
 func (cw *compressWriter) Write(b []byte) (int, error) {
-	contentType := cw.Header().Get("Content-Type")
+	if !cw.initialized {
+		contentType := cw.Header().Get("Content-Type")
 
-	if strings.Contains(contentType, "text/html") || strings.Contains(contentType, "application/json") {
-		cw.w.Header().Set("Content-Encoding", "gzip")
+		cw.compressed =
+			strings.Contains(contentType, "application/json") ||
+				strings.Contains(contentType, "text/html")
 
+		if cw.compressed {
+			cw.Header().Set("Content-Encoding", "gzip")
+		}
+
+		cw.initialized = true
+	}
+
+	if cw.compressed {
 		return cw.zw.Write(b)
 	}
 
