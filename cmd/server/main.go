@@ -71,11 +71,7 @@ func main() {
 
 	var memRepository *repository.MemStorage
 	if restore {
-		metrics, err := fileStorage.Load()
-		if err != nil {
-			sugar.Errorw("failed to restore metrics from file: %w", err)
-			return
-		}
+		metrics, _ := fileStorage.Load()
 		memRepository = repository.NewMemStorageFromMetrics(metrics)
 	} else {
 		memRepository = repository.NewMemStorage()
