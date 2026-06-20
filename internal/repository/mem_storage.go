@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
 	"sync"
 )
 
@@ -68,4 +69,29 @@ func (m *MemStorage) UpdateGauge(_ context.Context, metricName string, value flo
 	defer m.mu.Unlock()
 
 	m.gauge[metricName] = value
+}
+
+func (m *MemStorage) GetAllMetrics() []models.Metrics {
+	counter := m.GetAllCounters(context.Background())
+	result := make([]models.Metrics, 0)
+
+	for name, value := range counter {
+		result = append(result, models.Metrics{
+			ID:    name,
+			MType: models.Counter,
+			Delta: &value,
+		})
+	}
+
+	gauges := m.GetAllGauges(context.Background())
+
+	for name, value := range gauges {
+		result = append(result, models.Metrics{
+			ID:    name,
+			MType: models.Gauge,
+			Value: &value,
+		})
+	}
+
+	return result
 }

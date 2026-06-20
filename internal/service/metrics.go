@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 
 	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
@@ -22,15 +23,24 @@ type MetricsRepository interface {
 	GetGauge(ctx context.Context, metricName string) (float64, bool)
 	IncrementCounter(ctx context.Context, metricName string, value int64)
 	UpdateGauge(ctx context.Context, metricName string, value float64)
+	GetAllMetrics() []models.Metrics
+}
+
+type MetricsFileStorage interface {
+	Save(metrics []models.Metrics) error
 }
 
 type MetricsService struct {
-	repository MetricsRepository
+	repository    MetricsRepository
+	fileStorage   MetricsFileStorage
+	storeInterval int
 }
 
-func NewMetricsService(repository MetricsRepository) *MetricsService {
+func NewMetricsService(repository MetricsRepository, fileStorage MetricsFileStorage, storeInterval int) *MetricsService {
 	return &MetricsService{
-		repository: repository,
+		repository:    repository,
+		fileStorage:   fileStorage,
+		storeInterval: storeInterval,
 	}
 }
 
@@ -67,6 +77,13 @@ func (s *MetricsService) UpdateMetric(ctx context.Context, metric models.Metrics
 		s.repository.IncrementCounter(ctx, metric.ID, *metric.Delta)
 		counterValue, _ := s.repository.GetCounter(ctx, metric.ID)
 
+		if s.storeInterval == 0 {
+			err := s.fileStorage.Save(s.repository.GetAllMetrics())
+			if err != nil {
+				return models.Metrics{}, fmt.Errorf("failed to save metrics to file: %w", err)
+			}
+		}
+
 		metric.Delta = &counterValue
 
 		return metric, nil
@@ -77,10 +94,18 @@ func (s *MetricsService) UpdateMetric(ctx context.Context, metric models.Metrics
 
 		s.repository.UpdateGauge(ctx, metric.ID, *metric.Value)
 
+		if s.storeInterval == 0 {
+			err := s.fileStorage.Save(s.repository.GetAllMetrics())
+			if err != nil {
+				return models.Metrics{}, fmt.Errorf("failed to save metrics to file: %w", err)
+			}
+		}
+
 		return metric, nil
 	default:
 		return models.Metrics{}, ErrUnknownMetricType
 	}
+
 }
 
 func (s *MetricsService) GetMetric(ctx context.Context, metric models.Metrics) (models.Metrics, error) {

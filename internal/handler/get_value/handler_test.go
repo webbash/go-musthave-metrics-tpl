@@ -2,6 +2,7 @@ package get_value
 
 import (
 	"context"
+	file "github.com/webbash/go-musthave-metrics-tpl.git/internal/storage"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -19,8 +20,9 @@ func TestHandler_ServeHTTP(t *testing.T) {
 	ctx := context.Background()
 	storage.UpdateGauge(ctx, "test_gauge", 10.6)
 	storage.IncrementCounter(ctx, "test_counter", 10)
+	fileStorage := &file.MockFileStorage{}
 
-	metricsService := service.NewMetricsService(storage)
+	metricsService := service.NewMetricsService(storage, fileStorage, 0)
 	handler := NewHandler(metricsService)
 	r := chi.NewRouter()
 	r.Get("/value/{metricType}/{metricName}", handler.ServeHTTP)

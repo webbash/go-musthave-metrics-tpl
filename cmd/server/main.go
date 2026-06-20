@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -20,6 +21,7 @@ import (
 	update_metric_handler "github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/update_metric"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/repository"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/storage"
 	"go.uber.org/zap"
 )
 
@@ -31,7 +33,7 @@ func main() {
 
 	flag.StringVar(&addr, "a", "localhost:8080", "server endpoint")
 	flag.IntVar(&storeInterval, "i", 300, "metric collection to file interval")
-	flag.StringVar(&fileStoragePath, "f", "./tmp/temporary.json", "file storage path")
+	flag.StringVar(&fileStoragePath, "f", "./tmp/temporary.json", "file memRepository path")
 	flag.BoolVar(&restore, "r", false, "restore metrics from file")
 
 	flag.Parse()
@@ -57,8 +59,9 @@ func main() {
 	}
 
 	r := chi.NewRouter()
-	storage := repository.NewMemStorage()
-	metricsService := service.NewMetricsService(storage)
+	fileStorage := storage.NewFileStorage(fileStoragePath)
+	memRepository := repository.NewMemStorage()
+	metricsService := service.NewMetricsService(memRepository, fileStorage, storeInterval)
 	updateH := update_handler.NewHandler(metricsService)
 	updateMetricH := update_metric_handler.NewHandler(metricsService)
 	getValueMetricH := get_value_metric.NewHandler(metricsService)
@@ -100,6 +103,25 @@ func main() {
 			os.Exit(1)
 		}
 	}()
+
+	if storeInterval != 0 {
+		go func() {
+			ticker := time.NewTicker(time.Duration(storeInterval) * time.Second)
+			defer ticker.Stop()
+
+			for {
+				select {
+				case <-ticker.C:
+					metrics := memRepository.GetAllMetrics()
+					err := fileStorage.Save(metrics)
+					if err != nil {
+						sugar.Errorw(fmt.Sprintf("failed to save metrics to file: %s", err))
+						return
+					}
+				}
+			}
+		}()
+	}
 
 	// Graceful shutdown
 	quit := make(chan os.Signal, 1)
