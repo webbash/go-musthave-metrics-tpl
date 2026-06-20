@@ -58,16 +58,6 @@ func main() {
 		}
 	}
 
-	r := chi.NewRouter()
-	fileStorage := storage.NewFileStorage(fileStoragePath)
-	memRepository := repository.NewMemStorage()
-	metricsService := service.NewMetricsService(memRepository, fileStorage, storeInterval)
-	updateH := update_handler.NewHandler(metricsService)
-	updateMetricH := update_metric_handler.NewHandler(metricsService)
-	getValueMetricH := get_value_metric.NewHandler(metricsService)
-	getValueH := get_value.NewHandler(metricsService)
-	getValueListH := get_value_list.NewHandler(metricsService)
-
 	logger, err := zap.NewDevelopment()
 	if err != nil {
 		panic(err)
@@ -75,6 +65,28 @@ func main() {
 	defer logger.Sync()
 
 	sugar := logger.Sugar()
+
+	r := chi.NewRouter()
+	fileStorage := storage.NewFileStorage(fileStoragePath)
+
+	var memRepository *repository.MemStorage
+	if restore {
+		metrics, err := fileStorage.Load()
+		if err != nil {
+			sugar.Errorw("failed to restore metrics from file: %w", err)
+			return
+		}
+		memRepository = repository.NewMemStorageFromMetrics(metrics)
+	} else {
+		memRepository = repository.NewMemStorage()
+	}
+
+	metricsService := service.NewMetricsService(memRepository, fileStorage, storeInterval)
+	updateH := update_handler.NewHandler(metricsService)
+	updateMetricH := update_metric_handler.NewHandler(metricsService)
+	getValueMetricH := get_value_metric.NewHandler(metricsService)
+	getValueH := get_value.NewHandler(metricsService)
+	getValueListH := get_value_list.NewHandler(metricsService)
 
 	r.Use(middleware.LoggingMiddleware(sugar))
 	r.Use(middleware.GzipMiddleware())

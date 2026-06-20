@@ -12,6 +12,25 @@ type MemStorage struct {
 	gauge   map[string]float64
 }
 
+func NewMemStorageFromMetrics(metrics []models.Metrics) *MemStorage {
+	counter := make(map[string]int64)
+	gauge := make(map[string]float64)
+
+	for _, metric := range metrics {
+		if metric.MType == models.Counter {
+			counter[metric.ID] = *metric.Delta
+		}
+		if metric.MType == models.Gauge {
+			gauge[metric.ID] = *metric.Value
+		}
+	}
+
+	return &MemStorage{
+		counter: counter,
+		gauge:   gauge,
+	}
+}
+
 func NewMemStorage() *MemStorage {
 	return &MemStorage{
 		counter: make(map[string]int64),
