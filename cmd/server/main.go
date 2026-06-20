@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -24,11 +25,35 @@ import (
 
 func main() {
 	var addr string
+	var restore bool
+	var storeInterval int
+	var fileStoragePath string
+
 	flag.StringVar(&addr, "a", "localhost:8080", "server endpoint")
+	flag.IntVar(&storeInterval, "i", 300, "metric collection to file interval")
+	flag.StringVar(&fileStoragePath, "f", "./tmp/temporary.json", "file storage path")
+	flag.BoolVar(&restore, "r", false, "restore metrics from file")
+
 	flag.Parse()
 
 	if envAddress := os.Getenv("ADDRESS"); envAddress != "" {
 		addr = envAddress
+	}
+
+	if envStoreInterval := os.Getenv("STORE_INTERVAL"); envStoreInterval != "" {
+		if seconds, err := strconv.Atoi(envStoreInterval); err == nil {
+			storeInterval = seconds
+		}
+	}
+
+	if envFileStoragePath := os.Getenv("FILE_STORAGE_PATH"); envFileStoragePath != "" {
+		fileStoragePath = envFileStoragePath
+	}
+
+	if envRestore := os.Getenv("RESTORE"); envRestore != "" {
+		if r, err := strconv.ParseBool(envRestore); err == nil {
+			restore = r
+		}
 	}
 
 	r := chi.NewRouter()
