@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,12 +13,12 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/webbash/go-musthave-metrics-tpl.git/cmd/server/middleware"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/get_value"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/get_value_list"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/get_value_metric"
 	update_handler "github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/update"
 	update_metric_handler "github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/update_metric"
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/middleware"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/repository"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/storage"
@@ -60,7 +60,7 @@ func main() {
 
 	logger, err := zap.NewDevelopment()
 	if err != nil {
-		panic(err)
+		log.Fatalf("failed to initialize zap logger: %s", err)
 	}
 	defer logger.Sync()
 
@@ -71,7 +71,10 @@ func main() {
 
 	var memRepository *repository.MemStorage
 	if restore {
-		metrics, _ := fileStorage.Load()
+		metrics, err := fileStorage.Load()
+		if err != nil {
+			sugar.Errorw("failed to load metrics from file", "err", err)
+		}
 		memRepository = repository.NewMemStorageFromMetrics(metrics)
 	} else {
 		memRepository = repository.NewMemStorage()
@@ -107,7 +110,7 @@ func main() {
 	go func() {
 		sugar.Infow("starting server", "addr", addr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			sugar.Infow("server closed", "err", err)
+			sugar.Errorw("server closed", "err", err)
 			os.Exit(1)
 		}
 	}()
@@ -123,8 +126,8 @@ func main() {
 					metrics := memRepository.GetAllMetrics()
 					err := fileStorage.Save(metrics)
 					if err != nil {
-						sugar.Errorw(fmt.Sprintf("failed to save metrics to file: %s", err))
-						return
+						sugar.Errorw("failed to save metrics to file", "err", err)
+						continue
 					}
 				}
 			}

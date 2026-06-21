@@ -3,8 +3,11 @@ package update_metric
 import (
 	"bytes"
 	"encoding/json"
-	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
+	"errors"
 	"net/http"
+
+	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
 )
 
 type Handler struct {
@@ -45,7 +48,12 @@ func (h Handler) ServeHTTP(res http.ResponseWriter, r *http.Request) {
 
 	metric, err = h.service.UpdateMetric(r.Context(), metric)
 	if err != nil {
-		http.Error(res, err.Error(), http.StatusBadRequest)
+		if errors.Is(err, service.ErrUnknownMetricType) || errors.Is(err, service.ErrInvalidMetricValue) {
+			http.Error(res, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		http.Error(res, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
