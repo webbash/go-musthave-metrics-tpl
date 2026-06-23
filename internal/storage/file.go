@@ -3,9 +3,10 @@ package storage
 import (
 	"encoding/json"
 	"fmt"
-	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
 	"os"
 	"path/filepath"
+
+	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
 )
 
 type FileStorage struct {
@@ -19,9 +20,12 @@ func NewFileStorage(path string) *FileStorage {
 }
 
 func (s *FileStorage) Save(metrics []models.Metrics) error {
-	data, _ := json.Marshal(metrics)
+	data, err := json.Marshal(metrics)
+	if err != nil {
+		return fmt.Errorf("could not marshal metrics: %w", err)
+	}
 
-	err := os.MkdirAll(filepath.Dir(s.path), 0755)
+	err = os.MkdirAll(filepath.Dir(s.path), 0755)
 	if err != nil {
 		return fmt.Errorf("failed to create subdirs: %w", err)
 	}

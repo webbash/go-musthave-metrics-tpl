@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"runtime"
 	"strings"
 	"time"
@@ -124,8 +125,12 @@ func (a *Agent) sendUpdateMetric(metric models.Metrics) error {
 		return fmt.Errorf("gzip closing: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/update", a.basicURL)
-	req, err := http.NewRequest(http.MethodPost, url, &buf)
+	updateUrl, err := url.JoinPath(a.basicURL, "/update")
+	if err != nil {
+		return fmt.Errorf("create url: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, updateUrl, &buf)
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
