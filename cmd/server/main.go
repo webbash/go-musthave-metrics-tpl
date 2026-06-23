@@ -3,22 +3,15 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/get_value"
-	"github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/get_value_list"
-	"github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/get_value_metric"
-	update_handler "github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/update"
-	update_metric_handler "github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/update_metric"
-	"github.com/webbash/go-musthave-metrics-tpl.git/internal/middleware"
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal"
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/config"
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/logger"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/repository"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/storage"
@@ -26,87 +19,17 @@ import (
 )
 
 func main() {
-	var addr string
-	var restore bool
-	var storeInterval int
-	var fileStoragePath string
+	cfg := config.NewConfig()
+	sugar := logger.NewLogger()
 
-	flag.StringVar(&addr, "a", "localhost:8080", "server endpoint")
-	flag.IntVar(&storeInterval, "i", 300, "metric collection to file interval")
-	flag.StringVar(&fileStoragePath, "f", "./tmp/temporary.json", "file memRepository path")
-	flag.BoolVar(&restore, "r", false, "restore metrics from file")
-
-	flag.Parse()
-
-	if envAddress := os.Getenv("ADDRESS"); envAddress != "" {
-		addr = envAddress
-	}
-
-	if envStoreInterval := os.Getenv("STORE_INTERVAL"); envStoreInterval != "" {
-		if seconds, err := strconv.Atoi(envStoreInterval); err == nil {
-			storeInterval = seconds
-		}
-	}
-
-	if envFileStoragePath := os.Getenv("FILE_STORAGE_PATH"); envFileStoragePath != "" {
-		fileStoragePath = envFileStoragePath
-	}
-
-	if envRestore := os.Getenv("RESTORE"); envRestore != "" {
-		if r, err := strconv.ParseBool(envRestore); err == nil {
-			restore = r
-		}
-	}
-
-	logger, err := zap.NewDevelopment()
-	if err != nil {
-		log.Fatalf("failed to initialize zap logger: %s", err)
-	}
-	defer logger.Sync()
-
-	sugar := logger.Sugar()
-
-	r := chi.NewRouter()
-	fileStorage := storage.NewFileStorage(fileStoragePath)
-
-	var memStorage *repository.MemStorage
-	if restore {
-		metrics, err := fileStorage.Load()
-		if err != nil {
-			sugar.Errorw("failed to load metrics from file", "err", err)
-		}
-		memStorage = repository.NewMemStorageFromMetrics(metrics)
-	} else {
-		memStorage = repository.NewMemStorage()
-	}
-
-	var repo service.MetricsRepository
-	if storeInterval == 0 {
-		repo = repository.NewFileRepository(memStorage, fileStorage)
-	} else {
-		repo = memStorage
-	}
-
+	fileStorage := storage.NewFileStorage(cfg.FileStoragePath)
+	repo := buildRepository(cfg, sugar, fileStorage)
 	metricsService := service.NewMetricsService(repo)
-	updateH := update_handler.NewHandler(metricsService)
-	updateMetricH := update_metric_handler.NewHandler(metricsService)
-	getValueMetricH := get_value_metric.NewHandler(metricsService)
-	getValueH := get_value.NewHandler(metricsService)
-	getValueListH := get_value_list.NewHandler(metricsService)
 
-	r.Use(middleware.LoggingMiddleware(sugar))
-	r.Use(middleware.GzipMiddleware())
-
-	r.Get("/", getValueListH.ServeHTTP)
-	r.Post("/value", getValueMetricH.ServeHTTP)
-	r.Post("/value/", getValueMetricH.ServeHTTP)
-	r.Post("/update", updateMetricH.ServeHTTP)
-	r.Post("/update/", updateMetricH.ServeHTTP)
-	r.Get("/value/{metricType}/{metricName}", getValueH.ServeHTTP)
-	r.Post("/update/{metricType}/{metricName}/{metricValue}", updateH.ServeHTTP)
+	r := internal.NewRouter(cfg, sugar, metricsService).Init()
 
 	srv := &http.Server{
-		Addr:         addr,
+		Addr:         cfg.Address,
 		Handler:      r,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
@@ -115,16 +38,16 @@ func main() {
 
 	// Graceful start
 	go func() {
-		sugar.Infow("starting server", "addr", addr)
+		sugar.Infow("starting server", "addr", cfg.Address)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			sugar.Errorw("server closed", "err", err)
 			os.Exit(1)
 		}
 	}()
 
-	if storeInterval != 0 {
+	if cfg.StoreInterval != 0 {
 		go func() {
-			ticker := time.NewTicker(time.Duration(storeInterval) * time.Second)
+			ticker := time.NewTicker(time.Duration(cfg.StoreInterval) * time.Second)
 			defer ticker.Stop()
 
 			for {
@@ -157,4 +80,32 @@ func main() {
 	}
 
 	sugar.Infow("server stopped gracefully")
+}
+
+func buildRepository(
+	cfg config.Config,
+	sugar *zap.SugaredLogger,
+	fileStorage *storage.FileStorage,
+) service.MetricsRepository {
+	var memStorage *repository.MemStorage
+	if cfg.Restore {
+		metrics, err := fileStorage.Load()
+		if err != nil {
+			sugar.Errorw("failed to load metrics from file", "err", err)
+			memStorage = repository.NewMemStorage()
+		} else {
+			memStorage = repository.NewMemStorageFromMetrics(metrics)
+		}
+	} else {
+		memStorage = repository.NewMemStorage()
+	}
+
+	var repo service.MetricsRepository
+	if cfg.StoreInterval == 0 {
+		repo = repository.NewFileRepository(memStorage, fileStorage)
+	} else {
+		repo = memStorage
+	}
+
+	return repo
 }
