@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/repository"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
-	file "github.com/webbash/go-musthave-metrics-tpl.git/internal/storage"
 )
 
 func TestHandler_ServeHTTP(t *testing.T) {
@@ -66,9 +65,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 	}
 
 	storage := repository.NewMemStorage()
-	fileStorage := &file.MockFileStorage{}
-
-	metricsService := service.NewMetricsService(storage, fileStorage, 0)
+	metricsService := service.NewMetricsService(storage)
 	handler := NewHandler(metricsService)
 
 	for _, tt := range tests {
