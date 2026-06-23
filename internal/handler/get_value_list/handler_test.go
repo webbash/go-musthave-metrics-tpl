@@ -13,17 +13,17 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/repository"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
-	file "github.com/webbash/go-musthave-metrics-tpl.git/internal/storage"
 )
 
 func TestHandler_ServeHTTP(t *testing.T) {
 	storage := repository.NewMemStorage()
 	ctx := context.Background()
-	storage.UpdateGauge(ctx, "test_gauge", 10.6)
-	storage.IncrementCounter(ctx, "test_counter", 10)
-	fileStorage := &file.MockFileStorage{}
+	err := storage.UpdateGauge(ctx, "test_gauge", 10.6)
+	require.NoError(t, err)
+	err = storage.IncrementCounter(ctx, "test_counter", 10)
+	require.NoError(t, err)
 
-	metricsService := service.NewMetricsService(storage, fileStorage, 0)
+	metricsService := service.NewMetricsService(storage)
 	handler := NewHandler(metricsService)
 	r := chi.NewRouter()
 	r.Get("/", handler.ServeHTTP)

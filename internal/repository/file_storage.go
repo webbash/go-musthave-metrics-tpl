@@ -26,27 +26,34 @@ func (r *FileRepository) IncrementCounter(
 	ctx context.Context,
 	metricName string,
 	value int64,
-) {
-	r.MemStorage.IncrementCounter(ctx, metricName, value)
+) error {
+	err := r.MemStorage.IncrementCounter(ctx, metricName, value)
+	if err != nil {
+		return fmt.Errorf("file storage: called increment counter: %w", err)
+	}
 
 	if err := r.persist(); err != nil {
-
-		// либо логируем ошибку
-		// либо меняем сигнатуры методов и возвращаем её наверх
+		return fmt.Errorf("file storage: persist: %w", err)
 	}
+
+	return nil
 }
 
 func (r *FileRepository) UpdateGauge(
 	ctx context.Context,
 	metricName string,
 	value float64,
-) {
-	r.MemStorage.UpdateGauge(ctx, metricName, value)
+) error {
+	err := r.MemStorage.UpdateGauge(ctx, metricName, value)
+	if err != nil {
+		return fmt.Errorf("file storage: called increment counter: %w", err)
+	}
 
 	if err := r.persist(); err != nil {
-		// либо логируем ошибку
-		// либо меняем сигнатуры методов и возвращаем её наверх
+		return fmt.Errorf("file storage: persist: %w", err)
 	}
+
+	return nil
 }
 
 func (r *FileRepository) persist() error {

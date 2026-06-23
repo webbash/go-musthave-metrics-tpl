@@ -69,18 +69,25 @@ func main() {
 	r := chi.NewRouter()
 	fileStorage := storage.NewFileStorage(fileStoragePath)
 
-	var memRepository *repository.MemStorage
+	var memStorage *repository.MemStorage
 	if restore {
 		metrics, err := fileStorage.Load()
 		if err != nil {
 			sugar.Errorw("failed to load metrics from file", "err", err)
 		}
-		memRepository = repository.NewMemStorageFromMetrics(metrics)
+		memStorage = repository.NewMemStorageFromMetrics(metrics)
 	} else {
-		memRepository = repository.NewMemStorage()
+		memStorage = repository.NewMemStorage()
 	}
 
-	metricsService := service.NewMetricsService(memRepository, fileStorage, storeInterval)
+	var repo service.MetricsRepository
+	if storeInterval == 0 {
+		repo = repository.NewFileRepository(memStorage, fileStorage)
+	} else {
+		repo = memStorage
+	}
+
+	metricsService := service.NewMetricsService(repo)
 	updateH := update_handler.NewHandler(metricsService)
 	updateMetricH := update_metric_handler.NewHandler(metricsService)
 	getValueMetricH := get_value_metric.NewHandler(metricsService)
@@ -123,7 +130,7 @@ func main() {
 			for {
 				select {
 				case <-ticker.C:
-					metrics := memRepository.GetAllMetrics()
+					metrics := repo.GetAllMetrics()
 					err := fileStorage.Save(metrics)
 					if err != nil {
 						sugar.Errorw("failed to save metrics to file", "err", err)

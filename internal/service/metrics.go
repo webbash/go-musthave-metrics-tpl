@@ -21,8 +21,8 @@ type MetricsRepository interface {
 	GetAllCounters(ctx context.Context) map[string]int64
 	GetCounter(ctx context.Context, metricName string) (int64, bool)
 	GetGauge(ctx context.Context, metricName string) (float64, bool)
-	IncrementCounter(ctx context.Context, metricName string, value int64)
-	UpdateGauge(ctx context.Context, metricName string, value float64)
+	IncrementCounter(ctx context.Context, metricName string, value int64) error
+	UpdateGauge(ctx context.Context, metricName string, value float64) error
 	GetAllMetrics() []models.Metrics
 }
 
@@ -36,11 +36,9 @@ type MetricsService struct {
 	storeInterval int
 }
 
-func NewMetricsService(repository MetricsRepository, fileStorage MetricsFileStorage, storeInterval int) *MetricsService {
+func NewMetricsService(repository MetricsRepository) *MetricsService {
 	return &MetricsService{
-		repository:    repository,
-		fileStorage:   fileStorage,
-		storeInterval: storeInterval,
+		repository: repository,
 	}
 }
 
@@ -52,7 +50,10 @@ func (s *MetricsService) Update(ctx context.Context, metricType, metricName, met
 			return ErrInvalidMetricValue
 		}
 
-		s.repository.IncrementCounter(ctx, metricName, value)
+		errInc := s.repository.IncrementCounter(ctx, metricName, value)
+		if errInc != nil {
+			return fmt.Errorf("failed to increment counter: %w", errInc)
+		}
 		return nil
 	case models.Gauge:
 		value, err := strconv.ParseFloat(metricValue, 64)
@@ -60,7 +61,10 @@ func (s *MetricsService) Update(ctx context.Context, metricType, metricName, met
 			return ErrInvalidMetricValue
 		}
 
-		s.repository.UpdateGauge(ctx, metricName, value)
+		errUpd := s.repository.UpdateGauge(ctx, metricName, value)
+		if errUpd != nil {
+			return fmt.Errorf("failed to update gauge: %w", errUpd)
+		}
 		return nil
 	default:
 		return ErrUnknownMetricType
@@ -74,15 +78,11 @@ func (s *MetricsService) UpdateMetric(ctx context.Context, metric models.Metrics
 			return models.Metrics{}, ErrInvalidMetricValue
 		}
 
-		s.repository.IncrementCounter(ctx, metric.ID, *metric.Delta)
-		counterValue, _ := s.repository.GetCounter(ctx, metric.ID)
-
-		if s.storeInterval == 0 {
-			err := s.fileStorage.Save(s.repository.GetAllMetrics())
-			if err != nil {
-				return models.Metrics{}, fmt.Errorf("failed to save metrics to file: %w", err)
-			}
+		err := s.repository.IncrementCounter(ctx, metric.ID, *metric.Delta)
+		if err != nil {
+			return models.Metrics{}, fmt.Errorf("failed to increment counter: %w", err)
 		}
+		counterValue, _ := s.repository.GetCounter(ctx, metric.ID)
 
 		metric.Delta = &counterValue
 
@@ -92,13 +92,9 @@ func (s *MetricsService) UpdateMetric(ctx context.Context, metric models.Metrics
 			return models.Metrics{}, ErrInvalidMetricValue
 		}
 
-		s.repository.UpdateGauge(ctx, metric.ID, *metric.Value)
-
-		if s.storeInterval == 0 {
-			err := s.fileStorage.Save(s.repository.GetAllMetrics())
-			if err != nil {
-				return models.Metrics{}, fmt.Errorf("failed to save metrics to file: %w", err)
-			}
+		err := s.repository.UpdateGauge(ctx, metric.ID, *metric.Value)
+		if err != nil {
+			return models.Metrics{}, fmt.Errorf("failed to update gauge: %w", err)
 		}
 
 		return metric, nil

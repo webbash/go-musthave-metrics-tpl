@@ -2,8 +2,9 @@ package repository
 
 import (
 	"context"
-	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
 	"sync"
+
+	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
 )
 
 type MemStorage struct {
@@ -76,18 +77,22 @@ func (m *MemStorage) GetGauge(_ context.Context, metricName string) (float64, bo
 	return value, ok
 }
 
-func (m *MemStorage) IncrementCounter(_ context.Context, metricName string, value int64) {
+func (m *MemStorage) IncrementCounter(_ context.Context, metricName string, value int64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.counter[metricName] += value
+
+	return nil
 }
 
-func (m *MemStorage) UpdateGauge(_ context.Context, metricName string, value float64) {
+func (m *MemStorage) UpdateGauge(_ context.Context, metricName string, value float64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.gauge[metricName] = value
+
+	return nil
 }
 
 func (m *MemStorage) GetAllMetrics() []models.Metrics {
