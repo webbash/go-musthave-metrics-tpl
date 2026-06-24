@@ -23,21 +23,21 @@ func NewConfig() Config {
 
 	flag.Parse()
 
-	if envAddress := os.Getenv("ADDRESS"); envAddress != "" {
+	if envAddress, ok := os.LookupEnv("ADDRESS"); ok {
 		cfg.Address = envAddress
 	}
 
-	if envStoreInterval := os.Getenv("STORE_INTERVAL"); envStoreInterval != "" {
+	if envStoreInterval, ok := os.LookupEnv("STORE_INTERVAL"); ok {
 		if seconds, err := strconv.Atoi(envStoreInterval); err == nil {
 			cfg.StoreInterval = seconds
 		}
 	}
 
-	if envFileStoragePath := os.Getenv("FILE_STORAGE_PATH"); envFileStoragePath != "" {
+	if envFileStoragePath, ok := os.LookupEnv("FILE_STORAGE_PATH"); ok {
 		cfg.FileStoragePath = envFileStoragePath
 	}
 
-	if envRestore := os.Getenv("RESTORE"); envRestore != "" {
+	if envRestore, ok := os.LookupEnv("RESTORE"); ok {
 		if r, err := strconv.ParseBool(envRestore); err == nil {
 			cfg.Restore = r
 		}
