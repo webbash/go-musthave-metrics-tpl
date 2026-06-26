@@ -1,10 +1,14 @@
 package agent
 
 import (
+	"bytes"
+	"compress/gzip"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"runtime"
 	"strings"
 	"time"
@@ -77,15 +81,27 @@ func (a *Agent) SendMetrics() error {
 	var resultErr error
 
 	for metricName, value := range a.gaugeMetrics {
-		url := fmt.Sprintf("%s/update/%s/%s/%v", a.basicURL, models.Gauge, metricName, value)
-		if err := a.sendPostRequest(url); err != nil {
+		metric := models.Metrics{
+			ID:    metricName,
+			MType: models.Gauge,
+			Value: &value,
+		}
+
+		err := a.sendUpdateMetric(metric)
+
+		if err != nil {
 			resultErr = errors.Join(resultErr, fmt.Errorf("send gauge metric %s: %w", metricName, err))
 		}
 	}
 
 	for metricName, value := range a.counterMetrics {
-		url := fmt.Sprintf("%s/update/%s/%s/%v", a.basicURL, models.Counter, metricName, value)
-		if err := a.sendPostRequest(url); err != nil {
+		metric := models.Metrics{
+			ID:    metricName,
+			MType: models.Counter,
+			Delta: &value,
+		}
+		err := a.sendUpdateMetric(metric)
+		if err != nil {
 			resultErr = errors.Join(resultErr, fmt.Errorf("send counter metric %s: %w", metricName, err))
 		}
 	}
@@ -93,27 +109,45 @@ func (a *Agent) SendMetrics() error {
 	return resultErr
 }
 
-func (a *Agent) sendPostRequest(url string) error {
-	request, err := http.NewRequest(http.MethodPost, url, http.NoBody)
+func (a *Agent) sendUpdateMetric(metric models.Metrics) error {
+	body, err := json.Marshal(metric)
+	if err != nil {
+		return fmt.Errorf("marshal metric: %w", err)
+	}
+
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	if _, err := gz.Write(body); err != nil {
+		return fmt.Errorf("gzip write: %w", err)
+	}
+	err = gz.Close()
+	if err != nil {
+		return fmt.Errorf("gzip closing: %w", err)
+	}
+
+	updateUrl, err := url.JoinPath(a.basicURL, "/update")
+	if err != nil {
+		return fmt.Errorf("create url: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, updateUrl, &buf)
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept-Encoding", "gzip")
+	req.Header.Set("Content-Encoding", "gzip")
 
-	request.Header.Set("Content-Type", "text/plain")
-
-	response, err := a.httpClient.Do(request)
+	resp, err := a.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("send request: %w", err)
-	}
-	var resultErr error
-
-	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		resultErr = fmt.Errorf("unexpected response status: %s", response.Status)
+		return fmt.Errorf("send update: %w", err)
 	}
 
-	if err := response.Body.Close(); err != nil {
-		resultErr = errors.Join(resultErr, fmt.Errorf("close response body: %w", err))
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("send update: %d", resp.StatusCode)
 	}
 
-	return resultErr
+	return nil
 }

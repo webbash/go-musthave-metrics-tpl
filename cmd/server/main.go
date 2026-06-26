@@ -3,39 +3,33 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
-	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/get_value"
-	"github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/get_value_list"
-	update_handler "github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/update"
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal"
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/config"
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/logger"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/repository"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/storage"
+	"go.uber.org/zap"
 )
 
 func main() {
-	addr := flag.String("a", "localhost:8080", "server endpoint")
-	flag.Parse()
+	cfg := config.NewConfig()
+	sugar := logger.NewLogger()
 
-	r := chi.NewRouter()
-	storage := repository.NewMemStorage()
-	metricsService := service.NewMetricsService(storage)
-	updateHandlerConcrete := update_handler.NewHandler(metricsService)
-	getValueHandlerConcrete := get_value.NewHandler(metricsService)
-	getValueListHandlerConcrete := get_value_list.NewHandler(metricsService)
+	fileStorage := storage.NewFileStorage(cfg.FileStoragePath)
+	repo := buildRepository(cfg, sugar, fileStorage)
+	metricsService := service.NewMetricsService(repo)
 
-	r.Get("/", getValueListHandlerConcrete.ServeHTTP)
-	r.Get("/value/{metricType}/{metricName}", getValueHandlerConcrete.ServeHTTP)
-	r.Post("/update/{metricType}/{metricName}/{metricValue}", updateHandlerConcrete.ServeHTTP)
+	r := internal.NewRouter(cfg, sugar, metricsService).Init()
 
 	srv := &http.Server{
-		Addr:         *addr,
+		Addr:         cfg.Address,
 		Handler:      r,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
@@ -44,27 +38,74 @@ func main() {
 
 	// Graceful start
 	go func() {
-		slog.Info("server starting", "addr", *addr)
+		sugar.Infow("starting server", "addr", cfg.Address)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			slog.Error("server failed", "error", err)
+			sugar.Errorw("server closed", "err", err)
 			os.Exit(1)
 		}
 	}()
+
+	if cfg.StoreInterval != 0 {
+		go func() {
+			ticker := time.NewTicker(time.Duration(cfg.StoreInterval) * time.Second)
+			defer ticker.Stop()
+
+			for {
+				select {
+				case <-ticker.C:
+					metrics := repo.GetAllMetrics()
+					err := fileStorage.Save(metrics)
+					if err != nil {
+						sugar.Errorw("failed to save metrics to file", "err", err)
+						continue
+					}
+				}
+			}
+		}()
+	}
 
 	// Graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-	slog.Info("shutting down server")
+	sugar.Infow("shutting down server")
 
 	// Grace period для завершения текущих запросов
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		slog.Error("server forced to shutdown", "error", err)
+		sugar.Errorw("server forced to shutdown", "err", err)
 		os.Exit(1)
 	}
 
-	slog.Info("server stopped gracefully")
+	sugar.Infow("server stopped gracefully")
+}
+
+func buildRepository(
+	cfg config.Config,
+	sugar *zap.SugaredLogger,
+	fileStorage *storage.FileStorage,
+) service.MetricsRepository {
+	var memStorage *repository.MemStorage
+	if cfg.Restore {
+		metrics, err := fileStorage.Load()
+		if err != nil {
+			sugar.Errorw("failed to load metrics from file", "err", err)
+			memStorage = repository.NewMemStorage()
+		} else {
+			memStorage = repository.NewMemStorageFromMetrics(metrics)
+		}
+	} else {
+		memStorage = repository.NewMemStorage()
+	}
+
+	var repo service.MetricsRepository
+	if cfg.StoreInterval == 0 {
+		repo = repository.NewFileRepository(memStorage, fileStorage)
+	} else {
+		repo = memStorage
+	}
+
+	return repo
 }

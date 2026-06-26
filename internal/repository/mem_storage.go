@@ -3,12 +3,33 @@ package repository
 import (
 	"context"
 	"sync"
+
+	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
 )
 
 type MemStorage struct {
 	mu      sync.RWMutex
 	counter map[string]int64
 	gauge   map[string]float64
+}
+
+func NewMemStorageFromMetrics(metrics []models.Metrics) *MemStorage {
+	counter := make(map[string]int64)
+	gauge := make(map[string]float64)
+
+	for _, metric := range metrics {
+		if metric.MType == models.Counter {
+			counter[metric.ID] = *metric.Delta
+		}
+		if metric.MType == models.Gauge {
+			gauge[metric.ID] = *metric.Value
+		}
+	}
+
+	return &MemStorage{
+		counter: counter,
+		gauge:   gauge,
+	}
 }
 
 func NewMemStorage() *MemStorage {
@@ -56,16 +77,45 @@ func (m *MemStorage) GetGauge(_ context.Context, metricName string) (float64, bo
 	return value, ok
 }
 
-func (m *MemStorage) IncrementCounter(_ context.Context, metricName string, value int64) {
+func (m *MemStorage) IncrementCounter(_ context.Context, metricName string, value int64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.counter[metricName] += value
+
+	return nil
 }
 
-func (m *MemStorage) UpdateGauge(_ context.Context, metricName string, value float64) {
+func (m *MemStorage) UpdateGauge(_ context.Context, metricName string, value float64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.gauge[metricName] = value
+
+	return nil
+}
+
+func (m *MemStorage) GetAllMetrics() []models.Metrics {
+	counter := m.GetAllCounters(context.Background())
+	result := make([]models.Metrics, 0)
+
+	for name, value := range counter {
+		result = append(result, models.Metrics{
+			ID:    name,
+			MType: models.Counter,
+			Delta: &value,
+		})
+	}
+
+	gauges := m.GetAllGauges(context.Background())
+
+	for name, value := range gauges {
+		result = append(result, models.Metrics{
+			ID:    name,
+			MType: models.Gauge,
+			Value: &value,
+		})
+	}
+
+	return result
 }

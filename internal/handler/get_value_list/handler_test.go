@@ -18,8 +18,10 @@ import (
 func TestHandler_ServeHTTP(t *testing.T) {
 	storage := repository.NewMemStorage()
 	ctx := context.Background()
-	storage.UpdateGauge(ctx, "test_gauge", 10.6)
-	storage.IncrementCounter(ctx, "test_counter", 10)
+	err := storage.UpdateGauge(ctx, "test_gauge", 10.6)
+	require.NoError(t, err)
+	err = storage.IncrementCounter(ctx, "test_counter", 10)
+	require.NoError(t, err)
 
 	metricsService := service.NewMetricsService(storage)
 	handler := NewHandler(metricsService)

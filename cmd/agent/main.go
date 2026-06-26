@@ -2,21 +2,50 @@ package main
 
 import (
 	"flag"
+	"log"
 	"log/slog"
 	"net/http"
 	"time"
 
+	"github.com/caarlos0/env/v11"
+
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/agent"
 )
 
+type Config struct {
+	Address        string `env:"ADDRESS"`
+	PollInterval   int    `env:"POLL_INTERVAL"`
+	ReportInterval int    `env:"REPORT_INTERVAL"`
+}
+
 func main() {
-	basicURL := flag.String("a", "localhost:8080", "agent endpoint url")
-	pollInterval := flag.Int("p", 2, "poll interval in seconds")
-	reportInterval := flag.Int("r", 10, "report interval in seconds")
+	var cfg Config
+	err := env.Parse(&cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var address string
+	var pollInterval int
+	var reportInterval int
+
+	flag.StringVar(&address, "a", "localhost:8080", "agent address url")
+	flag.IntVar(&pollInterval, "p", 2, "poll interval in seconds")
+	flag.IntVar(&reportInterval, "r", 10, "report interval in seconds")
 
 	flag.Parse()
 
-	agentClient := agent.NewAgent(*basicURL, time.Duration(*pollInterval)*time.Second, time.Duration(*reportInterval)*time.Second, &http.Client{})
+	if cfg.Address != "" {
+		address = cfg.Address
+	}
+	if cfg.PollInterval != 0 {
+		pollInterval = cfg.PollInterval
+	}
+	if cfg.ReportInterval != 0 {
+		reportInterval = cfg.ReportInterval
+	}
+
+	agentClient := agent.NewAgent(address, time.Duration(pollInterval)*time.Second, time.Duration(reportInterval)*time.Second, &http.Client{})
 
 	go func() {
 		pollTicker := time.NewTicker(agentClient.PollInterval)
