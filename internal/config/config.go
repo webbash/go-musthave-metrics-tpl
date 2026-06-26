@@ -11,6 +11,7 @@ type Config struct {
 	Restore         bool
 	StoreInterval   int
 	FileStoragePath string
+	DatabaseDSN     string
 }
 
 func NewConfig() Config {
@@ -20,6 +21,7 @@ func NewConfig() Config {
 	flag.IntVar(&cfg.StoreInterval, "i", 300, "metric collection to file interval")
 	flag.StringVar(&cfg.FileStoragePath, "f", "./tmp/temporary.json", "file memRepository path")
 	flag.BoolVar(&cfg.Restore, "r", false, "restore metrics from file")
+	flag.StringVar(&cfg.DatabaseDSN, "d", "", "DB connection string")
 
 	flag.Parse()
 
@@ -35,6 +37,10 @@ func NewConfig() Config {
 
 	if envFileStoragePath, ok := os.LookupEnv("FILE_STORAGE_PATH"); ok {
 		cfg.FileStoragePath = envFileStoragePath
+	}
+
+	if envDsn, ok := os.LookupEnv("DATABASE_DSN"); ok {
+		cfg.DatabaseDSN = envDsn
 	}
 
 	if envRestore, ok := os.LookupEnv("RESTORE"); ok {

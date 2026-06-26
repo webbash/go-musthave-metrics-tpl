@@ -3,9 +3,11 @@ package internal
 import (
 	"github.com/go-chi/chi/v5"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/config"
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/config/db"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/get_value"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/get_value_list"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/get_value_metric"
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/ping_db"
 	update_handler "github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/update"
 	update_metric_handler "github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/update_metric"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/middleware"
@@ -30,6 +32,9 @@ func NewRouter(cfg config.Config, logger *zap.SugaredLogger, metricsService *ser
 }
 
 func (r *Router) Init() *chi.Mux {
+	pgConnector := db.NewPGConnector(r.cfg.DatabaseDSN)
+
+	pingH := ping_db.NewHandler(pgConnector)
 	updateH := update_handler.NewHandler(r.metricsService)
 	updateMetricH := update_metric_handler.NewHandler(r.metricsService)
 	getValueMetricH := get_value_metric.NewHandler(r.metricsService)
@@ -46,6 +51,7 @@ func (r *Router) Init() *chi.Mux {
 	r.router.Post("/update/", updateMetricH.ServeHTTP)
 	r.router.Get("/value/{metricType}/{metricName}", getValueH.ServeHTTP)
 	r.router.Post("/update/{metricType}/{metricName}/{metricValue}", updateH.ServeHTTP)
+	r.router.Get("/ping", pingH.ServeHTTP)
 
 	return r.router
 }
