@@ -6,10 +6,10 @@ import (
 )
 
 type Handler struct {
-	repository repository
+	repository metricsRepository
 }
 
-func NewHandler(repository repository) *Handler {
+func NewHandler(repository metricsRepository) *Handler {
 	return &Handler{
 		repository: repository,
 	}

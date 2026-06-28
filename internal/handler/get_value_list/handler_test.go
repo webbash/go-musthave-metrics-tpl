@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/repository"
-	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
 )
 
 func TestHandler_ServeHTTP(t *testing.T) {
@@ -23,8 +22,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 	err = storage.IncrementCounter(ctx, "test_counter", 10)
 	require.NoError(t, err)
 
-	metricsService := service.NewMetricsService(storage)
-	handler := NewHandler(metricsService)
+	handler := NewHandler(storage)
 	r := chi.NewRouter()
 	r.Get("/", handler.ServeHTTP)
 
