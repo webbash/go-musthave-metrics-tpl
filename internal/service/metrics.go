@@ -17,13 +17,13 @@ var (
 )
 
 type MetricsRepository interface {
-	GetAllGauges(ctx context.Context) map[string]float64
-	GetAllCounters(ctx context.Context) map[string]int64
-	GetCounter(ctx context.Context, metricName string) (int64, bool)
-	GetGauge(ctx context.Context, metricName string) (float64, bool)
+	GetAllGauges(ctx context.Context) (map[string]float64, error)
+	GetAllCounters(ctx context.Context) (map[string]int64, error)
+	GetCounter(ctx context.Context, metricName string) (int64, error)
+	GetGauge(ctx context.Context, metricName string) (float64, error)
 	IncrementCounter(ctx context.Context, metricName string, value int64) error
 	UpdateGauge(ctx context.Context, metricName string, value float64) error
-	GetAllMetrics() []models.Metrics
+	GetAllMetrics(ctx context.Context) ([]models.Metrics, error)
 }
 
 type MetricsFileStorage interface {
@@ -111,8 +111,8 @@ func (s *MetricsService) GetMetric(ctx context.Context, metric models.Metrics) (
 
 	switch metric.MType {
 	case models.Gauge:
-		value, ok := s.repository.GetGauge(ctx, metric.ID)
-		if !ok {
+		value, err := s.repository.GetGauge(ctx, metric.ID)
+		if err != nil {
 			return models.Metrics{}, ErrMetricNotFound
 		}
 
@@ -120,8 +120,8 @@ func (s *MetricsService) GetMetric(ctx context.Context, metric models.Metrics) (
 		return metric, nil
 
 	case models.Counter:
-		value, ok := s.repository.GetCounter(ctx, metric.ID)
-		if !ok {
+		value, err := s.repository.GetCounter(ctx, metric.ID)
+		if err != nil {
 			return models.Metrics{}, ErrMetricNotFound
 		}
 		metric.Delta = &value
@@ -134,15 +134,15 @@ func (s *MetricsService) GetMetric(ctx context.Context, metric models.Metrics) (
 func (s *MetricsService) Get(ctx context.Context, metricType, metricName string) (string, error) {
 	switch metricType {
 	case models.Counter:
-		value, ok := s.repository.GetCounter(ctx, metricName)
-		if !ok {
+		value, err := s.repository.GetCounter(ctx, metricName)
+		if err != nil {
 			return "", ErrMetricNotFound
 		}
 
 		return strconv.FormatInt(value, 10), nil
 	case models.Gauge:
-		value, ok := s.repository.GetGauge(ctx, metricName)
-		if !ok {
+		value, err := s.repository.GetGauge(ctx, metricName)
+		if err != nil {
 			return "", ErrMetricNotFound
 		}
 
@@ -150,8 +150,4 @@ func (s *MetricsService) Get(ctx context.Context, metricType, metricName string)
 	default:
 		return "", ErrUnknownMetricType
 	}
-}
-
-func (s *MetricsService) GetAll(ctx context.Context) (map[string]float64, map[string]int64) {
-	return s.repository.GetAllGauges(ctx), s.repository.GetAllCounters(ctx)
 }

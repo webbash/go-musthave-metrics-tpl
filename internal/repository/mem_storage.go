@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
@@ -39,7 +40,7 @@ func NewMemStorage() *MemStorage {
 	}
 }
 
-func (m *MemStorage) GetAllGauges(_ context.Context) map[string]float64 {
+func (m *MemStorage) GetAllGauges(_ context.Context) (map[string]float64, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -47,10 +48,10 @@ func (m *MemStorage) GetAllGauges(_ context.Context) map[string]float64 {
 	for name, val := range m.gauge {
 		result[name] = val
 	}
-	return result
+	return result, nil
 }
 
-func (m *MemStorage) GetAllCounters(_ context.Context) map[string]int64 {
+func (m *MemStorage) GetAllCounters(_ context.Context) (map[string]int64, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -58,23 +59,29 @@ func (m *MemStorage) GetAllCounters(_ context.Context) map[string]int64 {
 	for name, val := range m.counter {
 		result[name] = val
 	}
-	return result
+	return result, nil
 }
 
-func (m *MemStorage) GetCounter(_ context.Context, metricName string) (int64, bool) {
+func (m *MemStorage) GetCounter(_ context.Context, metricName string) (int64, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	value, ok := m.counter[metricName]
-	return value, ok
+	if !ok {
+		return 0, fmt.Errorf("counter %s not found", metricName)
+	}
+	return value, nil
 }
 
-func (m *MemStorage) GetGauge(_ context.Context, metricName string) (float64, bool) {
+func (m *MemStorage) GetGauge(_ context.Context, metricName string) (float64, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	value, ok := m.gauge[metricName]
-	return value, ok
+	if !ok {
+		return 0, fmt.Errorf("gauge %s not found", metricName)
+	}
+	return value, nil
 }
 
 func (m *MemStorage) IncrementCounter(_ context.Context, metricName string, value int64) error {
@@ -95,8 +102,11 @@ func (m *MemStorage) UpdateGauge(_ context.Context, metricName string, value flo
 	return nil
 }
 
-func (m *MemStorage) GetAllMetrics() []models.Metrics {
-	counter := m.GetAllCounters(context.Background())
+func (m *MemStorage) GetAllMetrics(ctx context.Context) ([]models.Metrics, error) {
+	counter, err := m.GetAllCounters(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all counters: %w", err)
+	}
 	result := make([]models.Metrics, 0)
 
 	for name, value := range counter {
@@ -107,7 +117,10 @@ func (m *MemStorage) GetAllMetrics() []models.Metrics {
 		})
 	}
 
-	gauges := m.GetAllGauges(context.Background())
+	gauges, err := m.GetAllGauges(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all gauges: %w", err)
+	}
 
 	for name, value := range gauges {
 		result = append(result, models.Metrics{
@@ -117,5 +130,5 @@ func (m *MemStorage) GetAllMetrics() []models.Metrics {
 		})
 	}
 
-	return result
+	return result, nil
 }

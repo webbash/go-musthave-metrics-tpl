@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"net/http"
 	"os"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/config"
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/config/db"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/logger"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/repository"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
@@ -22,11 +24,24 @@ func main() {
 	cfg := config.NewConfig()
 	sugar := logger.NewLogger()
 
+	var database *sql.DB
+	if cfg.DatabaseDSN != "" {
+		var err error
+
+		database, err = db.NewPGConnector(cfg.DatabaseDSN).Connect()
+		if err != nil {
+			sugar.Errorw("failed to connect to database", "err", err)
+			os.Exit(1)
+		}
+
+		defer database.Close()
+	}
+
 	fileStorage := storage.NewFileStorage(cfg.FileStoragePath)
-	repo := buildRepository(cfg, sugar, fileStorage)
+	repo := buildRepository(cfg, sugar, fileStorage, database)
 	metricsService := service.NewMetricsService(repo)
 
-	r := internal.NewRouter(cfg, sugar, metricsService).Init()
+	r := internal.NewRouter(cfg, sugar, metricsService, repo).Init()
 
 	srv := &http.Server{
 		Addr:         cfg.Address,
@@ -35,6 +50,10 @@ func main() {
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  120 * time.Second,
 	}
+
+	// Grace period для завершения текущих запросов
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	// Graceful start
 	go func() {
@@ -53,8 +72,12 @@ func main() {
 			for {
 				select {
 				case <-ticker.C:
-					metrics := repo.GetAllMetrics()
-					err := fileStorage.Save(metrics)
+					metrics, err := repo.GetAllMetrics(context.Background())
+					if err != nil {
+						sugar.Errorw("failed to get all metrics", "err", err)
+						continue
+					}
+					err = fileStorage.Save(metrics)
 					if err != nil {
 						sugar.Errorw("failed to save metrics to file", "err", err)
 						continue
@@ -70,10 +93,6 @@ func main() {
 	<-quit
 	sugar.Infow("shutting down server")
 
-	// Grace period для завершения текущих запросов
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
 	if err := srv.Shutdown(ctx); err != nil {
 		sugar.Errorw("server forced to shutdown", "err", err)
 		os.Exit(1)
@@ -86,7 +105,12 @@ func buildRepository(
 	cfg config.Config,
 	sugar *zap.SugaredLogger,
 	fileStorage *storage.FileStorage,
+	database *sql.DB,
 ) service.MetricsRepository {
+	if database != nil {
+		return repository.NewPostgresRepository(database)
+	}
+
 	var memStorage *repository.MemStorage
 	if cfg.Restore {
 		metrics, err := fileStorage.Load()

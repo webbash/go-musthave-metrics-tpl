@@ -20,14 +20,16 @@ type Router struct {
 	logger         *zap.SugaredLogger
 	router         *chi.Mux
 	metricsService *service.MetricsService
+	repository     service.MetricsRepository
 }
 
-func NewRouter(cfg config.Config, logger *zap.SugaredLogger, metricsService *service.MetricsService) *Router {
+func NewRouter(cfg config.Config, logger *zap.SugaredLogger, metricsService *service.MetricsService, repository service.MetricsRepository) *Router {
 	return &Router{
 		cfg:            cfg,
 		logger:         logger,
 		router:         chi.NewRouter(),
 		metricsService: metricsService,
+		repository:     repository,
 	}
 }
 
@@ -39,7 +41,7 @@ func (r *Router) Init() *chi.Mux {
 	updateMetricH := update_metric_handler.NewHandler(r.metricsService)
 	getValueMetricH := get_value_metric.NewHandler(r.metricsService)
 	getValueH := get_value.NewHandler(r.metricsService)
-	getValueListH := get_value_list.NewHandler(r.metricsService)
+	getValueListH := get_value_list.NewHandler(r.repository)
 
 	r.router.Use(middleware.LoggingMiddleware(r.logger))
 	r.router.Use(middleware.GzipMiddleware())

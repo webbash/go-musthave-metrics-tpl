@@ -57,7 +57,10 @@ func (r *FileRepository) UpdateGauge(
 }
 
 func (r *FileRepository) persist() error {
-	metrics := r.MemStorage.GetAllMetrics()
+	metrics, err := r.MemStorage.GetAllMetrics(context.TODO())
+	if err != nil {
+		return fmt.Errorf("get all metrics: %w", err)
+	}
 
 	if err := r.storage.Save(metrics); err != nil {
 		return fmt.Errorf("save metrics to file: %w", err)
