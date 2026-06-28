@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pressly/goose/v3"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/config"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/config/db"
@@ -27,10 +28,19 @@ func main() {
 	var database *sql.DB
 	if cfg.DatabaseDSN != "" {
 		var err error
-
 		database, err = db.NewPGConnector(cfg.DatabaseDSN).Connect()
 		if err != nil {
 			sugar.Errorw("failed to connect to database", "err", err)
+			os.Exit(1)
+		}
+
+		if err := goose.SetDialect("postgres"); err != nil {
+			sugar.Errorw("failed to setting sql dialect", "err", err)
+			os.Exit(1)
+		}
+
+		if err := goose.Up(database, "migrations"); err != nil {
+			sugar.Errorw("failed to run migrations", "err", err)
 			os.Exit(1)
 		}
 
