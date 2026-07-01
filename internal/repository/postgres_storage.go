@@ -152,13 +152,15 @@ func (r *PostgresRepository) UpdateBatch(ctx context.Context, metrics []models.M
 		Columns("id", "type", "delta", "value")
 
 	for _, metric := range metrics {
-		builder.Values(metric.ID, models.Counter, metric.Delta, metric.Value)
+		builder = builder.Values(metric.ID, metric.MType, metric.Delta, metric.Value)
 	}
 
 	sqlBatchInsert, args, err := builder.
 		Suffix("ON CONFLICT (id) DO UPDATE SET delta = EXCLUDED.delta, value = EXCLUDED.value").
 		PlaceholderFormat(squirrel.Dollar).
 		ToSql()
+
+	fmt.Println(sqlBatchInsert)
 
 	if err != nil {
 		return fmt.Errorf("failed to build update query: %w", err)

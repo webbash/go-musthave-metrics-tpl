@@ -9,6 +9,7 @@ import (
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/get_value_metric"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/ping_db"
 	update_handler "github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/update"
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/update_batch"
 	update_metric_handler "github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/update_metric"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/middleware"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
@@ -39,6 +40,7 @@ func (r *Router) Init() *chi.Mux {
 	pingH := ping_db.NewHandler(pgConnector)
 	updateH := update_handler.NewHandler(r.metricsService)
 	updateMetricH := update_metric_handler.NewHandler(r.metricsService)
+	updateBatchH := update_batch.NewHandler(r.metricsService)
 	getValueMetricH := get_value_metric.NewHandler(r.metricsService)
 	getValueH := get_value.NewHandler(r.metricsService)
 	getValueListH := get_value_list.NewHandler(r.repository)
@@ -49,6 +51,8 @@ func (r *Router) Init() *chi.Mux {
 	r.router.Get("/", getValueListH.ServeHTTP)
 	r.router.Post("/value", getValueMetricH.ServeHTTP)
 	r.router.Post("/value/", getValueMetricH.ServeHTTP)
+	r.router.Post("/updates", updateBatchH.ServeHTTP)
+	r.router.Post("/updates/", updateBatchH.ServeHTTP)
 	r.router.Post("/update", updateMetricH.ServeHTTP)
 	r.router.Post("/update/", updateMetricH.ServeHTTP)
 	r.router.Get("/value/{metricType}/{metricName}", getValueH.ServeHTTP)

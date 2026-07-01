@@ -16,21 +16,6 @@ var (
 	ErrInvalidMetric      = errors.New("metric is invalid")
 )
 
-type MetricsRepository interface {
-	GetAllGauges(ctx context.Context) (map[string]float64, error)
-	GetAllCounters(ctx context.Context) (map[string]int64, error)
-	GetCounter(ctx context.Context, metricName string) (int64, error)
-	GetGauge(ctx context.Context, metricName string) (float64, error)
-	IncrementCounter(ctx context.Context, metricName string, value int64) error
-	UpdateGauge(ctx context.Context, metricName string, value float64) error
-	GetAllMetrics(ctx context.Context) ([]models.Metrics, error)
-	UpdateBatch(ctx context.Context, metrics []models.Metrics) error
-}
-
-type MetricsFileStorage interface {
-	Save(metrics []models.Metrics) error
-}
-
 type MetricsService struct {
 	repository    MetricsRepository
 	fileStorage   MetricsFileStorage
@@ -151,4 +136,25 @@ func (s *MetricsService) Get(ctx context.Context, metricType, metricName string)
 	default:
 		return "", ErrUnknownMetricType
 	}
+}
+
+func (s *MetricsService) UpdateBatch(ctx context.Context, metrics []models.Metrics) error {
+	for _, metric := range metrics {
+		if metric.MType != models.Counter && metric.MType != models.Gauge {
+			return ErrUnknownMetricType
+		}
+		if metric.MType == models.Counter && metric.Delta == nil {
+			return ErrInvalidMetricValue
+		}
+		if metric.MType == models.Gauge && metric.Value == nil {
+			return ErrInvalidMetricValue
+		}
+	}
+
+	err := s.repository.UpdateBatch(ctx, metrics)
+	if err != nil {
+		return fmt.Errorf("failed to update batch metrics: %w", err)
+	}
+
+	return nil
 }
