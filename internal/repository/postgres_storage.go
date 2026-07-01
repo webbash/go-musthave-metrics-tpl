@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/Masterminds/squirrel"
 	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
 )
 
@@ -143,4 +144,39 @@ func (r *PostgresRepository) GetAllMetrics(ctx context.Context) ([]models.Metric
 	}
 
 	return metrics, nil
+}
+
+func (r *PostgresRepository) UpdateBatch(ctx context.Context, metrics []models.Metrics) error {
+	builder := squirrel.
+		Insert("metrics").
+		Columns("id", "type", "delta", "value")
+
+	for _, metric := range metrics {
+		builder.Values(metric.ID, models.Counter, metric.Delta, metric.Value)
+	}
+
+	sqlBatchInsert, args, err := builder.
+		Suffix("ON CONFLICT (id) DO UPDATE SET delta = EXCLUDED.delta, value = EXCLUDED.value").
+		PlaceholderFormat(squirrel.Dollar).
+		ToSql()
+
+	if err != nil {
+		return fmt.Errorf("failed to build update query: %w", err)
+	}
+
+	result, err := r.db.ExecContext(ctx, sqlBatchInsert, args...)
+	if err != nil {
+		return fmt.Errorf("failed to update metrics: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("no rows affected")
+	}
+
+	return nil
 }

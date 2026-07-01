@@ -132,3 +132,22 @@ func (m *MemStorage) GetAllMetrics(ctx context.Context) ([]models.Metrics, error
 
 	return result, nil
 }
+
+func (m *MemStorage) UpdateBatch(ctx context.Context, metrics []models.Metrics) error {
+	for _, metric := range metrics {
+		switch metric.MType {
+		case models.Counter:
+			err := m.IncrementCounter(ctx, metric.ID, *metric.Delta)
+			if err != nil {
+				return fmt.Errorf("failed to increment counter %s: %w", metric.ID, err)
+			}
+		case models.Gauge:
+			err := m.UpdateGauge(ctx, metric.ID, *metric.Value)
+			if err != nil {
+				return fmt.Errorf("failed to update gauge %s: %w", metric.ID, err)
+			}
+		}
+	}
+
+	return nil
+}

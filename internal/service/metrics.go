@@ -24,6 +24,7 @@ type MetricsRepository interface {
 	IncrementCounter(ctx context.Context, metricName string, value int64) error
 	UpdateGauge(ctx context.Context, metricName string, value float64) error
 	GetAllMetrics(ctx context.Context) ([]models.Metrics, error)
+	UpdateBatch(ctx context.Context, metrics []models.Metrics) error
 }
 
 type MetricsFileStorage interface {
