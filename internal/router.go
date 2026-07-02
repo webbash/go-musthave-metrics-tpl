@@ -40,7 +40,7 @@ func (r *Router) Init() *chi.Mux {
 	pingH := ping_db.NewHandler(pgConnector)
 	updateH := update_handler.NewHandler(r.metricsService)
 	updateMetricH := update_metric_handler.NewHandler(r.metricsService)
-	updateBatchH := update_batch.NewHandler(r.metricsService)
+	updateBatchH := update_batch.NewHandler(r.metricsService, r.logger)
 	getValueMetricH := get_value_metric.NewHandler(r.metricsService)
 	getValueH := get_value.NewHandler(r.metricsService)
 	getValueListH := get_value_list.NewHandler(r.repository)

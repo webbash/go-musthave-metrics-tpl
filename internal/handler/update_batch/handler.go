@@ -8,15 +8,18 @@ import (
 
 	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
+	"go.uber.org/zap"
 )
 
 type Handler struct {
 	service MetricsService
+	logger  *zap.SugaredLogger
 }
 
-func NewHandler(service MetricsService) *Handler {
+func NewHandler(service MetricsService, logger *zap.SugaredLogger) *Handler {
 	return &Handler{
 		service: service,
+		logger:  logger,
 	}
 }
 
@@ -47,12 +50,14 @@ func (h Handler) ServeHTTP(res http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		h.logger.Errorw("error updating metrics", "err", err)
 		http.Error(res, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	err = h.service.UpdateBatch(r.Context(), metrics)
 	if err != nil {
+		h.logger.Errorw("error updating metrics", "err", err)
 		http.Error(res, err.Error(), http.StatusInternalServerError)
 	}
 
