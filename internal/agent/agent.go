@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -78,38 +77,31 @@ func (a *Agent) ReadMetrics() {
 }
 
 func (a *Agent) SendMetrics() error {
-	var resultErr error
-
+	var metricsToSend []models.Metrics
 	for metricName, value := range a.gaugeMetrics {
-		metric := models.Metrics{
+		metricsToSend = append(metricsToSend, models.Metrics{
 			ID:    metricName,
 			MType: models.Gauge,
 			Value: &value,
-		}
-
-		err := a.sendUpdateMetric(metric)
-
-		if err != nil {
-			resultErr = errors.Join(resultErr, fmt.Errorf("send gauge metric %s: %w", metricName, err))
-		}
+		})
 	}
-
 	for metricName, value := range a.counterMetrics {
-		metric := models.Metrics{
+		metricsToSend = append(metricsToSend, models.Metrics{
 			ID:    metricName,
 			MType: models.Counter,
 			Delta: &value,
-		}
-		err := a.sendUpdateMetric(metric)
-		if err != nil {
-			resultErr = errors.Join(resultErr, fmt.Errorf("send counter metric %s: %w", metricName, err))
-		}
+		})
 	}
 
-	return resultErr
+	err := a.sendUpdateMetric(metricsToSend)
+	if err != nil {
+		return fmt.Errorf("error sending metrics: %w", err)
+	}
+
+	return nil
 }
 
-func (a *Agent) sendUpdateMetric(metric models.Metrics) error {
+func (a *Agent) sendUpdateMetric(metric []models.Metrics) error {
 	body, err := json.Marshal(metric)
 	if err != nil {
 		return fmt.Errorf("marshal metric: %w", err)
@@ -125,7 +117,7 @@ func (a *Agent) sendUpdateMetric(metric models.Metrics) error {
 		return fmt.Errorf("gzip closing: %w", err)
 	}
 
-	updateUrl, err := url.JoinPath(a.basicURL, "/update")
+	updateUrl, err := url.JoinPath(a.basicURL, "/updates")
 	if err != nil {
 		return fmt.Errorf("create url: %w", err)
 	}

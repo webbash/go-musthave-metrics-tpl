@@ -160,8 +160,6 @@ func (r *PostgresRepository) UpdateBatch(ctx context.Context, metrics []models.M
 		PlaceholderFormat(squirrel.Dollar).
 		ToSql()
 
-	fmt.Println(sqlBatchInsert)
-
 	if err != nil {
 		return fmt.Errorf("failed to build update query: %w", err)
 	}
