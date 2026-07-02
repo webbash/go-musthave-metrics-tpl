@@ -93,7 +93,7 @@ func (a *Agent) SendMetrics() error {
 		})
 	}
 
-	err := a.sendUpdateMetric(metricsToSend)
+	err := a.sendUpdateMetrics(metricsToSend)
 	if err != nil {
 		return fmt.Errorf("error sending metrics: %w", err)
 	}
@@ -101,7 +101,7 @@ func (a *Agent) SendMetrics() error {
 	return nil
 }
 
-func (a *Agent) sendUpdateMetric(metric []models.Metrics) error {
+func (a *Agent) sendUpdateMetrics(metric []models.Metrics) error {
 	body, err := json.Marshal(metric)
 	if err != nil {
 		return fmt.Errorf("marshal metric: %w", err)
