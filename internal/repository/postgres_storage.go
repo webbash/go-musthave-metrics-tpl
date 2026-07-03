@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/Masterminds/squirrel"
 	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
 )
 
@@ -147,36 +146,86 @@ func (r *PostgresRepository) GetAllMetrics(ctx context.Context) ([]models.Metric
 }
 
 func (r *PostgresRepository) UpdateBatch(ctx context.Context, metrics []models.Metrics) error {
-	builder := squirrel.
-		Insert("metrics").
-		Columns("id", "type", "delta", "value")
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	defer tx.Rollback()
+
+	stmtCounter, err := tx.PrepareContext(ctx, `
+INSERT INTO metrics (id, type, delta) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET delta = metrics.delta + EXCLUDED.delta;
+`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare statement for counter insert: %w", err)
+	}
+	defer stmtCounter.Close()
+
+	stmtGauge, err := tx.PrepareContext(ctx, `
+INSERT INTO metrics (id, type, value) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET value = EXCLUDED.value;
+`)
+
+	if err != nil {
+		return fmt.Errorf("failed to prepare statement for gauge insert: %w", err)
+	}
+	defer stmtGauge.Close()
 
 	for _, metric := range metrics {
-		builder = builder.Values(metric.ID, metric.MType, metric.Delta, metric.Value)
+		switch metric.MType {
+		case models.Counter:
+			_, err := stmtCounter.ExecContext(ctx, metric.ID, metric.MType, metric.Delta)
+			if err != nil {
+				return fmt.Errorf("failed to insert metric (counter): %w", err)
+			}
+		case models.Gauge:
+			_, err := stmtGauge.ExecContext(ctx, metric.ID, metric.MType, metric.Value)
+			if err != nil {
+				return fmt.Errorf("failed to insert metric (gauge): %w", err)
+			}
+		default:
+			return fmt.Errorf("unknown metric type: %s", metric.MType)
+		}
 	}
 
-	sqlBatchInsert, args, err := builder.
-		Suffix("ON CONFLICT (id) DO UPDATE SET delta = EXCLUDED.delta, value = EXCLUDED.value").
-		PlaceholderFormat(squirrel.Dollar).
-		ToSql()
-
-	if err != nil {
-		return fmt.Errorf("failed to build update query: %w", err)
-	}
-
-	result, err := r.db.ExecContext(ctx, sqlBatchInsert, args...)
-	if err != nil {
-		return fmt.Errorf("failed to update metrics: %w", err)
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return fmt.Errorf("no rows affected")
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return nil
 }
+
+//
+//func (r *PostgresRepository) UpdateBatch(ctx context.Context, metrics []models.Metrics) error {
+//	builder := squirrel.
+//		Insert("metrics").
+//		Columns("id", "type", "delta", "value")
+//
+//	for _, metric := range metrics {
+//		builder = builder.Values(metric.ID, metric.MType, metric.Delta, metric.Value)
+//	}
+//
+//	sqlBatchInsert, args, err := builder.
+//		Suffix("ON CONFLICT (id) DO UPDATE SET delta = EXCLUDED.delta, value = EXCLUDED.value").
+//		PlaceholderFormat(squirrel.Dollar).
+//		ToSql()
+//
+//	if err != nil {
+//		return fmt.Errorf("failed to build update query: %w", err)
+//	}
+//
+//	result, err := r.db.ExecContext(ctx, sqlBatchInsert, args...)
+//	if err != nil {
+//		return fmt.Errorf("failed to update metrics: %w", err)
+//	}
+//
+//	rowsAffected, err := result.RowsAffected()
+//	if err != nil {
+//		return fmt.Errorf("failed to get rows affected: %w", err)
+//	}
+//
+//	if rowsAffected == 0 {
+//		return fmt.Errorf("no rows affected")
+//	}
+//
+//	return nil
+//}
