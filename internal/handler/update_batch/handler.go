@@ -55,11 +55,5 @@ func (h Handler) ServeHTTP(res http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.service.UpdateBatch(r.Context(), metrics)
-	if err != nil {
-		h.logger.Errorw("error updating metrics", "err", err)
-		http.Error(res, err.Error(), http.StatusInternalServerError)
-	}
-
 	res.WriteHeader(http.StatusOK)
 }
