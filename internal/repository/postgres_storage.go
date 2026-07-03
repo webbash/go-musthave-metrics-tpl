@@ -146,6 +146,10 @@ func (r *PostgresRepository) GetAllMetrics(ctx context.Context) ([]models.Metric
 }
 
 func (r *PostgresRepository) UpdateBatch(ctx context.Context, metrics []models.Metrics) error {
+
+	fmt.Println(len(metrics))
+	fmt.Printf("%+v\n", metrics)
+
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -173,12 +177,17 @@ INSERT INTO metrics (id, type, value) VALUES ($1, $2, $3) ON CONFLICT (id) DO UP
 	for _, metric := range metrics {
 		switch metric.MType {
 		case models.Counter:
-			_, err := stmtCounter.ExecContext(ctx, metric.ID, metric.MType, metric.Delta)
+			fmt.Printf(
+				"ID=%s Type=%s Delta=%v\n",
+				metric.ID,
+				*metric.Delta,
+			)
+			_, err := stmtCounter.ExecContext(ctx, metric.ID, metric.MType, *metric.Delta)
 			if err != nil {
 				return fmt.Errorf("failed to insert metric (counter): %w", err)
 			}
 		case models.Gauge:
-			_, err := stmtGauge.ExecContext(ctx, metric.ID, metric.MType, metric.Value)
+			_, err := stmtGauge.ExecContext(ctx, metric.ID, metric.MType, *metric.Value)
 			if err != nil {
 				return fmt.Errorf("failed to insert metric (gauge): %w", err)
 			}
