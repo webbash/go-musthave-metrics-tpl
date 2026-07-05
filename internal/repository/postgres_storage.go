@@ -5,8 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
+	pgerrors "github.com/webbash/go-musthave-metrics-tpl.git/internal/errors"
 	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/retry"
 )
 
 type PostgresRepository struct {
@@ -146,86 +149,60 @@ func (r *PostgresRepository) GetAllMetrics(ctx context.Context) ([]models.Metric
 }
 
 func (r *PostgresRepository) UpdateBatch(ctx context.Context, metrics []models.Metrics) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
+	classifier := pgerrors.NewPostgresErrorClassifier()
 
-	defer tx.Rollback()
+	err := retry.Do(ctx, func() error {
+		tx, err := r.db.BeginTx(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("failed to begin transaction: %w", err)
+		}
+		defer tx.Rollback() // Откат при любой ошибке
 
-	stmtCounter, err := tx.PrepareContext(ctx, `
+		stmtCounter, err := tx.PrepareContext(ctx, `
 INSERT INTO metrics (id, type, delta) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET delta = metrics.delta + EXCLUDED.delta;
 `)
-	if err != nil {
-		return fmt.Errorf("failed to prepare statement for counter insert: %w", err)
-	}
-	defer stmtCounter.Close()
+		if err != nil {
+			return fmt.Errorf("failed to prepare statement for counter insert: %w", err)
+		}
+		defer stmtCounter.Close()
 
-	stmtGauge, err := tx.PrepareContext(ctx, `
+		stmtGauge, err := tx.PrepareContext(ctx, `
 INSERT INTO metrics (id, type, value) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET value = EXCLUDED.value;
 `)
-
-	if err != nil {
-		return fmt.Errorf("failed to prepare statement for gauge insert: %w", err)
-	}
-	defer stmtGauge.Close()
-
-	for _, metric := range metrics {
-		switch metric.MType {
-		case models.Counter:
-			_, err := stmtCounter.ExecContext(ctx, metric.ID, metric.MType, *metric.Delta)
-			if err != nil {
-				return fmt.Errorf("failed to insert metric (counter): %w", err)
-			}
-		case models.Gauge:
-			_, err := stmtGauge.ExecContext(ctx, metric.ID, metric.MType, *metric.Value)
-			if err != nil {
-				return fmt.Errorf("failed to insert metric (gauge): %w", err)
-			}
-		default:
-			return fmt.Errorf("unknown metric type: %s", metric.MType)
+		if err != nil {
+			return fmt.Errorf("failed to prepare statement for gauge insert: %w", err)
 		}
-	}
+		defer stmtGauge.Close()
 
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
+		for _, metric := range metrics {
+			switch metric.MType {
+			case models.Counter:
+				_, err := stmtCounter.ExecContext(ctx, metric.ID, metric.MType, *metric.Delta)
+				if err != nil {
+					return fmt.Errorf("failed to insert metric (counter): %w", err)
+				}
+			case models.Gauge:
+				_, err := stmtGauge.ExecContext(ctx, metric.ID, metric.MType, *metric.Value)
+				if err != nil {
+					return fmt.Errorf("failed to insert metric (gauge): %w", err)
+				}
+			default:
+				return fmt.Errorf("unknown metric type: %s", metric.MType)
+			}
+		}
 
-	return nil
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("failed to commit transaction: %w", err)
+		}
+		return nil
+	}, func(err error) bool {
+		return classifier.Classify(err) == pgerrors.Retriable
+	}, []time.Duration{
+		1 * time.Second,
+		3 * time.Second,
+		5 * time.Second,
+	})
+
+	// В err будет nil или последняя ошибка (если все попытки исчерпаны)
+	return err
 }
-
-//
-//func (r *PostgresRepository) UpdateBatch(ctx context.Context, metrics []models.Metrics) error {
-//	builder := squirrel.
-//		Insert("metrics").
-//		Columns("id", "type", "delta", "value")
-//
-//	for _, metric := range metrics {
-//		builder = builder.Values(metric.ID, metric.MType, metric.Delta, metric.Value)
-//	}
-//
-//	sqlBatchInsert, args, err := builder.
-//		Suffix("ON CONFLICT (id) DO UPDATE SET delta = EXCLUDED.delta, value = EXCLUDED.value").
-//		PlaceholderFormat(squirrel.Dollar).
-//		ToSql()
-//
-//	if err != nil {
-//		return fmt.Errorf("failed to build update query: %w", err)
-//	}
-//
-//	result, err := r.db.ExecContext(ctx, sqlBatchInsert, args...)
-//	if err != nil {
-//		return fmt.Errorf("failed to update metrics: %w", err)
-//	}
-//
-//	rowsAffected, err := result.RowsAffected()
-//	if err != nil {
-//		return fmt.Errorf("failed to get rows affected: %w", err)
-//	}
-//
-//	if rowsAffected == 0 {
-//		return fmt.Errorf("no rows affected")
-//	}
-//
-//	return nil
-//}

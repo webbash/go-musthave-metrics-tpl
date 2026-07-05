@@ -3,9 +3,12 @@ package agent
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
+	"net"
 	"net/http"
 	"net/url"
 	"runtime"
@@ -13,6 +16,7 @@ import (
 	"time"
 
 	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/retry"
 )
 
 type Agent struct {
@@ -93,7 +97,21 @@ func (a *Agent) SendMetrics() error {
 		})
 	}
 
-	err := a.sendUpdateMetrics(metricsToSend)
+	err := retry.Do(context.Background(), func() error {
+		return a.sendUpdateMetrics(metricsToSend)
+	}, func(err error) bool {
+		if err == nil {
+			return false
+		}
+
+		var netErr net.Error
+		return errors.As(err, &netErr)
+	}, []time.Duration{
+		1 * time.Second,
+		3 * time.Second,
+		5 * time.Second,
+	})
+
 	if err != nil {
 		return fmt.Errorf("error sending metrics: %w", err)
 	}

@@ -1,22 +1,10 @@
-package retry
+package errors
 
 import (
-	"context"
-	"database/sql"
 	"errors"
-	"fmt"
 
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
-)
-
-package pgerrors
-
-import (
-"errors"
-
-"github.com/jackc/pgerrcode"
-"github.com/jackc/pgx/v5/pgconn"
 )
 
 // ErrorClassification тип для классификации ошибок
@@ -101,33 +89,4 @@ func СlassifyPgError(pgErr *pgconn.PgError) PGErrorClassification {
 
 	// По умолчанию считаем ошибку неповторяемой
 	return NonRetriable
-}
-
-func executeWithRetry(db *sql.DB) error {
-	const maxRetries = 3
-	var lastErr error
-
-	classifier := NewPostgresErrorClassifier()
-
-	for attempt := 0; attempt < maxRetries; attempt++ {
-		ctx := context.Background()
-
-		_, err := db.ExecContext(ctx, "полезный SQL запрос")
-		if err == nil {
-			return nil
-		}
-
-		// Определяем классификацию ошибки
-		classification := classifier.Classify(err)
-
-		if classification == NonRetriable {
-			// Нет смысла повторять, возвращаем ошибку
-			fmt.Printf("Непредвиденная ошибка: %v\n", err)
-			return err
-		}
-
-		// .... делаем что-то полезное
-	}
-
-	return fmt.Errorf("операция прервана после %d попыток: %w", maxRetries, lastErr)
 }
