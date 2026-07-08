@@ -1,7 +1,7 @@
 -- +goose Up
 CREATE TABLE metrics
 (
-    id    TEXT PRIMARY KEY,
+    id    VARCHAR(200) PRIMARY KEY,
     type  TEXT NOT NULL,
     delta BIGINT,
     value DOUBLE PRECISION

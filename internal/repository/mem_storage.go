@@ -133,7 +133,7 @@ func (m *MemStorage) GetAllMetrics(ctx context.Context) ([]models.Metrics, error
 	return result, nil
 }
 
-func (m *MemStorage) UpdateBatch(ctx context.Context, metrics []models.Metrics) error {
+func (m *MemStorage) UpdateMany(ctx context.Context, metrics []models.Metrics) error {
 	for _, metric := range metrics {
 		switch metric.MType {
 		case models.Counter:

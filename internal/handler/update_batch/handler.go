@@ -12,11 +12,11 @@ import (
 )
 
 type Handler struct {
-	service MetricsService
+	service metricsService
 	logger  *zap.SugaredLogger
 }
 
-func NewHandler(service MetricsService, logger *zap.SugaredLogger) *Handler {
+func NewHandler(service metricsService, logger *zap.SugaredLogger) *Handler {
 	return &Handler{
 		service: service,
 		logger:  logger,
@@ -39,7 +39,7 @@ func (h Handler) ServeHTTP(res http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.UpdateBatch(r.Context(), metrics); err != nil {
+	if err := h.service.UpdateMany(r.Context(), metrics); err != nil {
 		if errors.Is(err, service.ErrUnknownMetricType) {
 			http.Error(res, "unknown metric type", http.StatusNotImplemented)
 			return

@@ -1,9 +1,10 @@
 package internal
 
 import (
+	"database/sql"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/config"
-	"github.com/webbash/go-musthave-metrics-tpl.git/internal/config/db"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/get_value"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/get_value_list"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/get_value_metric"
@@ -22,22 +23,22 @@ type Router struct {
 	router         *chi.Mux
 	metricsService *service.MetricsService
 	repository     service.MetricsRepository
+	db             *sql.DB
 }
 
-func NewRouter(cfg config.Config, logger *zap.SugaredLogger, metricsService *service.MetricsService, repository service.MetricsRepository) *Router {
+func NewRouter(cfg config.Config, logger *zap.SugaredLogger, metricsService *service.MetricsService, repository service.MetricsRepository, db *sql.DB) *Router {
 	return &Router{
 		cfg:            cfg,
 		logger:         logger,
 		router:         chi.NewRouter(),
 		metricsService: metricsService,
 		repository:     repository,
+		db:             db,
 	}
 }
 
 func (r *Router) Init() *chi.Mux {
-	pgConnector := db.NewPGConnector(r.cfg.DatabaseDSN)
-
-	pingH := ping_db.NewHandler(pgConnector)
+	pingH := ping_db.NewHandler(r.db, r.logger)
 	updateH := update_handler.NewHandler(r.metricsService)
 	updateMetricH := update_metric_handler.NewHandler(r.metricsService)
 	updateBatchH := update_batch.NewHandler(r.metricsService, r.logger)

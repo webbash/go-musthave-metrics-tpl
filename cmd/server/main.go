@@ -51,7 +51,7 @@ func main() {
 	repo := buildRepository(cfg, sugar, fileStorage, database)
 	metricsService := service.NewMetricsService(repo)
 
-	r := internal.NewRouter(cfg, sugar, metricsService, repo).Init()
+	r := internal.NewRouter(cfg, sugar, metricsService, repo, database).Init()
 
 	srv := &http.Server{
 		Addr:         cfg.Address,
@@ -60,10 +60,6 @@ func main() {
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  120 * time.Second,
 	}
-
-	// Grace period для завершения текущих запросов
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
 
 	// Graceful start
 	go func() {
@@ -102,6 +98,9 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	sugar.Infow("shutting down server")
+	// Grace period для завершения текущих запросов
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
 		sugar.Errorw("server forced to shutdown", "err", err)
