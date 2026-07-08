@@ -239,10 +239,15 @@ INSERT INTO metrics (id, type, value) VALUES ($1, $2, $3) ON CONFLICT (id) DO UP
 		if err := tx.Commit(); err != nil {
 			return fmt.Errorf("failed to commit transaction: %w", err)
 		}
+
 		return nil
 	})
 
-	return fmt.Errorf("r.UpdateBatch: %w", err)
+	if err != nil {
+		return fmt.Errorf("r.UpdateBatch: %w", err)
+	}
+
+	return nil
 }
 
 func (r *PostgresRepository) withRetry(ctx context.Context, fn func() error) error {
