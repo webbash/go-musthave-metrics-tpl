@@ -2,7 +2,7 @@
 CREATE TABLE metrics
 (
     id    VARCHAR(200) PRIMARY KEY,
-    type  TEXT NOT NULL,
+    type  VARCHAR(200) NOT NULL,
     delta BIGINT,
     value DOUBLE PRECISION
 );
