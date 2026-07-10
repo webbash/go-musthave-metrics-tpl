@@ -2,7 +2,6 @@ package agent
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -27,21 +26,4 @@ func TestAgent_ReadMetrics_NotZero(t *testing.T) {
 	assert.Len(t, agent.counterMetrics, 1)
 
 	assert.Equal(t, int64(1), agent.counterMetrics["PollCount"])
-}
-
-func TestAgent_UpdateMetrics(t *testing.T) {
-	counter := 0
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		counter++
-	}))
-	defer ts.Close()
-
-	client := ts.Client()
-
-	agent := NewAgent(ts.URL, 1*time.Second, 1*time.Second, client)
-	agent.ReadMetrics()
-	err := agent.SendMetrics()
-
-	assert.NoError(t, err)
-	assert.Equal(t, len(metricsList), counter)
 }

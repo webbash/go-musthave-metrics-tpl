@@ -4,6 +4,7 @@ import (
 	"context"
 )
 
-type metricsService interface {
-	GetAll(ctx context.Context) (map[string]float64, map[string]int64)
+type metricsRepository interface {
+	GetAllGauges(ctx context.Context) (map[string]float64, error)
+	GetAllCounters(ctx context.Context) (map[string]int64, error)
 }

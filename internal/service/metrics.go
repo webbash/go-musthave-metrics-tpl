@@ -16,20 +16,6 @@ var (
 	ErrInvalidMetric      = errors.New("metric is invalid")
 )
 
-type MetricsRepository interface {
-	GetAllGauges(ctx context.Context) map[string]float64
-	GetAllCounters(ctx context.Context) map[string]int64
-	GetCounter(ctx context.Context, metricName string) (int64, bool)
-	GetGauge(ctx context.Context, metricName string) (float64, bool)
-	IncrementCounter(ctx context.Context, metricName string, value int64) error
-	UpdateGauge(ctx context.Context, metricName string, value float64) error
-	GetAllMetrics() []models.Metrics
-}
-
-type MetricsFileStorage interface {
-	Save(metrics []models.Metrics) error
-}
-
 type MetricsService struct {
 	repository    MetricsRepository
 	fileStorage   MetricsFileStorage
@@ -111,8 +97,8 @@ func (s *MetricsService) GetMetric(ctx context.Context, metric models.Metrics) (
 
 	switch metric.MType {
 	case models.Gauge:
-		value, ok := s.repository.GetGauge(ctx, metric.ID)
-		if !ok {
+		value, err := s.repository.GetGauge(ctx, metric.ID)
+		if err != nil {
 			return models.Metrics{}, ErrMetricNotFound
 		}
 
@@ -120,8 +106,8 @@ func (s *MetricsService) GetMetric(ctx context.Context, metric models.Metrics) (
 		return metric, nil
 
 	case models.Counter:
-		value, ok := s.repository.GetCounter(ctx, metric.ID)
-		if !ok {
+		value, err := s.repository.GetCounter(ctx, metric.ID)
+		if err != nil {
 			return models.Metrics{}, ErrMetricNotFound
 		}
 		metric.Delta = &value
@@ -134,15 +120,15 @@ func (s *MetricsService) GetMetric(ctx context.Context, metric models.Metrics) (
 func (s *MetricsService) Get(ctx context.Context, metricType, metricName string) (string, error) {
 	switch metricType {
 	case models.Counter:
-		value, ok := s.repository.GetCounter(ctx, metricName)
-		if !ok {
+		value, err := s.repository.GetCounter(ctx, metricName)
+		if err != nil {
 			return "", ErrMetricNotFound
 		}
 
 		return strconv.FormatInt(value, 10), nil
 	case models.Gauge:
-		value, ok := s.repository.GetGauge(ctx, metricName)
-		if !ok {
+		value, err := s.repository.GetGauge(ctx, metricName)
+		if err != nil {
 			return "", ErrMetricNotFound
 		}
 
@@ -152,6 +138,23 @@ func (s *MetricsService) Get(ctx context.Context, metricType, metricName string)
 	}
 }
 
-func (s *MetricsService) GetAll(ctx context.Context) (map[string]float64, map[string]int64) {
-	return s.repository.GetAllGauges(ctx), s.repository.GetAllCounters(ctx)
+func (s *MetricsService) UpdateMany(ctx context.Context, metrics []models.Metrics) error {
+	for _, metric := range metrics {
+		if metric.MType != models.Counter && metric.MType != models.Gauge {
+			return ErrUnknownMetricType
+		}
+		if metric.MType == models.Counter && metric.Delta == nil {
+			return ErrInvalidMetricValue
+		}
+		if metric.MType == models.Gauge && metric.Value == nil {
+			return ErrInvalidMetricValue
+		}
+	}
+
+	err := s.repository.UpdateMany(ctx, metrics)
+	if err != nil {
+		return fmt.Errorf("failed to update batch metrics: %w", err)
+	}
+
+	return nil
 }

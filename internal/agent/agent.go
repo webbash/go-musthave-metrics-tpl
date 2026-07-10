@@ -3,10 +3,12 @@ package agent
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
+	"net"
 	"net/http"
 	"net/url"
 	"runtime"
@@ -14,6 +16,7 @@ import (
 	"time"
 
 	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/retry"
 )
 
 type Agent struct {
@@ -78,38 +81,45 @@ func (a *Agent) ReadMetrics() {
 }
 
 func (a *Agent) SendMetrics() error {
-	var resultErr error
-
+	var metricsToSend []models.Metrics
 	for metricName, value := range a.gaugeMetrics {
-		metric := models.Metrics{
+		metricsToSend = append(metricsToSend, models.Metrics{
 			ID:    metricName,
 			MType: models.Gauge,
 			Value: &value,
-		}
-
-		err := a.sendUpdateMetric(metric)
-
-		if err != nil {
-			resultErr = errors.Join(resultErr, fmt.Errorf("send gauge metric %s: %w", metricName, err))
-		}
+		})
 	}
-
 	for metricName, value := range a.counterMetrics {
-		metric := models.Metrics{
+		metricsToSend = append(metricsToSend, models.Metrics{
 			ID:    metricName,
 			MType: models.Counter,
 			Delta: &value,
-		}
-		err := a.sendUpdateMetric(metric)
-		if err != nil {
-			resultErr = errors.Join(resultErr, fmt.Errorf("send counter metric %s: %w", metricName, err))
-		}
+		})
 	}
 
-	return resultErr
+	err := retry.Do(context.Background(), func() error {
+		return a.sendUpdateMetrics(metricsToSend)
+	}, func(err error) bool {
+		if err == nil {
+			return false
+		}
+
+		var netErr net.Error
+		return errors.As(err, &netErr)
+	}, []time.Duration{
+		1 * time.Second,
+		3 * time.Second,
+		5 * time.Second,
+	})
+
+	if err != nil {
+		return fmt.Errorf("error sending metrics: %w", err)
+	}
+
+	return nil
 }
 
-func (a *Agent) sendUpdateMetric(metric models.Metrics) error {
+func (a *Agent) sendUpdateMetrics(metric []models.Metrics) error {
 	body, err := json.Marshal(metric)
 	if err != nil {
 		return fmt.Errorf("marshal metric: %w", err)
@@ -125,7 +135,7 @@ func (a *Agent) sendUpdateMetric(metric models.Metrics) error {
 		return fmt.Errorf("gzip closing: %w", err)
 	}
 
-	updateUrl, err := url.JoinPath(a.basicURL, "/update")
+	updateUrl, err := url.JoinPath(a.basicURL, "/updates")
 	if err != nil {
 		return fmt.Errorf("create url: %w", err)
 	}
