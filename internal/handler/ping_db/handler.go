@@ -1,34 +1,30 @@
 package ping_db
 
 import (
+	"database/sql"
 	"fmt"
 	"net/http"
 
-	"github.com/webbash/go-musthave-metrics-tpl.git/internal/config/db"
+	"go.uber.org/zap"
 )
 
 type Handler struct {
-	connector db.Connector
+	db     *sql.DB
+	logger *zap.SugaredLogger
 }
 
-func NewHandler(connector db.Connector) *Handler {
+func NewHandler(db *sql.DB, logger *zap.SugaredLogger) *Handler {
 	return &Handler{
-		connector: connector,
+		db:     db,
+		logger: logger,
 	}
 }
 
 func (h Handler) ServeHTTP(res http.ResponseWriter, r *http.Request) {
-	db, err := h.connector.Connect()
+	err := h.db.PingContext(r.Context())
 	if err != nil {
 		res.WriteHeader(http.StatusInternalServerError)
-		res.Write([]byte(err.Error()))
-		return
-	}
-
-	err = db.Ping()
-	if err != nil {
-		res.WriteHeader(http.StatusInternalServerError)
-		res.Write([]byte(err.Error()))
+		h.logger.Errorw("ping error", "err", err)
 		return
 	}
 

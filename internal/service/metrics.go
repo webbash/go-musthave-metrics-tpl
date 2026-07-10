@@ -138,7 +138,7 @@ func (s *MetricsService) Get(ctx context.Context, metricType, metricName string)
 	}
 }
 
-func (s *MetricsService) UpdateBatch(ctx context.Context, metrics []models.Metrics) error {
+func (s *MetricsService) UpdateMany(ctx context.Context, metrics []models.Metrics) error {
 	for _, metric := range metrics {
 		if metric.MType != models.Counter && metric.MType != models.Gauge {
 			return ErrUnknownMetricType
@@ -151,7 +151,7 @@ func (s *MetricsService) UpdateBatch(ctx context.Context, metrics []models.Metri
 		}
 	}
 
-	err := s.repository.UpdateBatch(ctx, metrics)
+	err := s.repository.UpdateMany(ctx, metrics)
 	if err != nil {
 		return fmt.Errorf("failed to update batch metrics: %w", err)
 	}

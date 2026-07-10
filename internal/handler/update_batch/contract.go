@@ -6,6 +6,6 @@ import (
 	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
 )
 
-type MetricsService interface {
-	UpdateBatch(ctx context.Context, metrics []models.Metrics) error
+type metricsService interface {
+	UpdateMany(ctx context.Context, metrics []models.Metrics) error
 }
