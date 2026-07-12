@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/crypto"
 	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/retry"
 )
@@ -27,9 +28,10 @@ type Agent struct {
 	ms             runtime.MemStats
 	httpClient     *http.Client
 	basicURL       string
+	signer         *crypto.Sha256Signer
 }
 
-func NewAgent(basicURL string, pollInterval, reportInterval time.Duration, httpClient *http.Client) *Agent {
+func NewAgent(basicURL string, pollInterval, reportInterval time.Duration, httpClient *http.Client, signer *crypto.Sha256Signer) *Agent {
 	addr := basicURL
 	if !strings.HasPrefix(addr, "http://") && !strings.HasPrefix(addr, "https://") {
 		addr = "http://" + addr
@@ -42,6 +44,7 @@ func NewAgent(basicURL string, pollInterval, reportInterval time.Duration, httpC
 		counterMetrics: make(map[string]int64),
 		httpClient:     httpClient,
 		basicURL:       addr,
+		signer:         signer,
 	}
 }
 
@@ -147,6 +150,9 @@ func (a *Agent) sendUpdateMetrics(metric []models.Metrics) error {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept-Encoding", "gzip")
 	req.Header.Set("Content-Encoding", "gzip")
+	if a.signer != nil {
+		req.Header.Set("HashSHA256", a.signer.Sign(body))
+	}
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {

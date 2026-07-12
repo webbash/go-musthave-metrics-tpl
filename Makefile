@@ -13,6 +13,16 @@ server-db:
 	DATABASE_DSN="postgres://metrics:metrics@localhost:5432/metrics?sslmode=disable" \
 	go run ./cmd/server
 
+.PHONE: server-db-hash
+server-db-hash:
+	DATABASE_DSN="postgres://metrics:metrics@localhost:5432/metrics?sslmode=disable" \
+	KEY="test" \
+    go run ./cmd/server
+
+.PHONE: agent-hash
+agent-hash:
+	KEY="test" go run ./cmd/agent
+
 .PHONY: agent
 agent:
 	go run ./cmd/agent

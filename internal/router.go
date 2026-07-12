@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/config"
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/crypto"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/get_value"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/get_value_list"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/get_value_metric"
@@ -48,6 +49,10 @@ func (r *Router) Init() *chi.Mux {
 
 	r.router.Use(middleware.LoggingMiddleware(r.logger))
 	r.router.Use(middleware.GzipMiddleware())
+	if r.cfg.HashSecret != "" {
+		signer := crypto.NewSha256Signer(r.cfg.HashSecret)
+		r.router.Use(middleware.HashCheckMiddleware(signer, r.logger))
+	}
 
 	r.router.Get("/", getValueListH.ServeHTTP)
 	r.router.Post("/value", getValueMetricH.ServeHTTP)

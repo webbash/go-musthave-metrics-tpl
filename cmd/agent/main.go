@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/crypto"
 
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/agent"
 )
@@ -51,7 +52,12 @@ func main() {
 		hashSecret = cfg.HashSecret
 	}
 
-	agentClient := agent.NewAgent(address, time.Duration(pollInterval)*time.Second, time.Duration(reportInterval)*time.Second, &http.Client{})
+	var signer *crypto.Sha256Signer
+	if hashSecret != "" {
+		signer = crypto.NewSha256Signer(hashSecret)
+	}
+
+	agentClient := agent.NewAgent(address, time.Duration(pollInterval)*time.Second, time.Duration(reportInterval)*time.Second, &http.Client{}, signer)
 
 	go func() {
 		pollTicker := time.NewTicker(agentClient.PollInterval)
