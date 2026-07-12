@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/crypto"
@@ -29,6 +30,7 @@ type Agent struct {
 	httpClient     *http.Client
 	basicURL       string
 	signer         *crypto.Sha256Signer
+	mu             sync.RWMutex
 }
 
 func NewAgent(basicURL string, pollInterval, reportInterval time.Duration, httpClient *http.Client, signer *crypto.Sha256Signer) *Agent {
@@ -50,6 +52,9 @@ func NewAgent(basicURL string, pollInterval, reportInterval time.Duration, httpC
 
 func (a *Agent) ReadMetrics() {
 	runtime.ReadMemStats(&a.ms)
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
 
 	a.gaugeMetrics["Alloc"] = float64(a.ms.Alloc)
 	a.gaugeMetrics["BuckHashSys"] = float64(a.ms.BuckHashSys)
@@ -85,6 +90,8 @@ func (a *Agent) ReadMetrics() {
 
 func (a *Agent) SendMetrics() error {
 	var metricsToSend []models.Metrics
+
+	a.mu.RLock()
 	for metricName, value := range a.gaugeMetrics {
 		metricsToSend = append(metricsToSend, models.Metrics{
 			ID:    metricName,
@@ -99,6 +106,7 @@ func (a *Agent) SendMetrics() error {
 			Delta: &value,
 		})
 	}
+	a.mu.RUnlock()
 
 	err := retry.Do(context.Background(), func() error {
 		return a.sendUpdateMetrics(metricsToSend)
