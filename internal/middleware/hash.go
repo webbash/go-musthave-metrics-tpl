@@ -30,7 +30,7 @@ func HashCheckMiddleware(signer *crypto.Sha256Signer, logger *zap.SugaredLogger)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			hash := r.Header.Get("HashSHA256")
 			if hash == "" {
-				w.WriteHeader(http.StatusBadRequest)
+				next.ServeHTTP(w, r)
 				return
 			}
 
