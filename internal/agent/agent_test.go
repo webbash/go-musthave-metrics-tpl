@@ -18,7 +18,7 @@ var metricsList = []string{
 }
 
 func TestAgent_ReadMetrics_NotZero(t *testing.T) {
-	agent := NewAgent("http://localhost", 1*time.Second, 1*time.Second, &http.Client{})
+	agent := NewAgent("http://localhost", 1*time.Second, 1*time.Second, &http.Client{}, nil)
 
 	agent.ReadMetrics()
 
