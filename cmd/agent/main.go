@@ -1,9 +1,9 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log"
-	"log/slog"
 	"net/http"
 	"time"
 
@@ -18,6 +18,7 @@ type Config struct {
 	PollInterval   int    `env:"POLL_INTERVAL"`
 	ReportInterval int    `env:"REPORT_INTERVAL"`
 	HashSecret     string `env:"KEY"`
+	RateLimit      int    `env:"RATE_LIMIT"`
 }
 
 func main() {
@@ -31,11 +32,13 @@ func main() {
 	var pollInterval int
 	var reportInterval int
 	var hashSecret string
+	var rateLimit int
 
 	flag.StringVar(&address, "a", "localhost:8080", "agent address url")
 	flag.IntVar(&pollInterval, "p", 2, "poll interval in seconds")
 	flag.IntVar(&reportInterval, "r", 10, "report interval in seconds")
 	flag.StringVar(&hashSecret, "k", "", "hash secret for sending metrics")
+	flag.IntVar(&rateLimit, "l", 1, "rate limit")
 
 	flag.Parse()
 
@@ -52,34 +55,15 @@ func main() {
 		hashSecret = cfg.HashSecret
 	}
 
+	if cfg.RateLimit != 0 {
+		rateLimit = cfg.RateLimit
+	}
+
 	var signer *crypto.Sha256Signer
 	if hashSecret != "" {
 		signer = crypto.NewSha256Signer(hashSecret)
 	}
 
-	agentClient := agent.NewAgent(address, time.Duration(pollInterval)*time.Second, time.Duration(reportInterval)*time.Second, &http.Client{}, signer)
-
-	go func() {
-		pollTicker := time.NewTicker(agentClient.PollInterval)
-		defer pollTicker.Stop()
-
-		for {
-			select {
-			case <-pollTicker.C:
-				agentClient.ReadMetrics()
-			}
-		}
-	}()
-
-	reportTicker := time.NewTicker(agentClient.ReportInterval)
-	defer reportTicker.Stop()
-
-	for {
-		select {
-		case <-reportTicker.C:
-			if err := agentClient.SendMetrics(); err != nil {
-				slog.Error("failed to send metrics", "error", err)
-			}
-		}
-	}
+	agent := agent.NewAgent(address, time.Duration(pollInterval)*time.Second, time.Duration(reportInterval)*time.Second, &http.Client{}, signer, rateLimit)
+	agent.Loop(context.Background())
 }

@@ -23,6 +23,10 @@ server-db-hash:
 agent-hash:
 	KEY="test" go run ./cmd/agent
 
+.PHONE: agent-rate-limit
+agent-rate-limit:
+	RATE_LIMIT=3 go run ./cmd/agent
+
 .PHONY: agent
 agent:
 	go run ./cmd/agent
