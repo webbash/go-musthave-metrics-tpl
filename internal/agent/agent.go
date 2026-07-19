@@ -2,13 +2,13 @@ package agent
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/crypto"
 	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
+	"go.uber.org/zap"
 )
 
 type Agent struct {
@@ -17,13 +17,14 @@ type Agent struct {
 	RateLimit        int
 	sender           *Sender
 	runtimeCollector *RuntimeCollector
+	logger           *zap.SugaredLogger
 }
 
 type Batch struct {
 	Metrics []models.Metrics
 }
 
-func NewAgent(basicURL string, pollInterval, reportInterval time.Duration, httpClient *http.Client, signer *crypto.Sha256Signer, rateLimit int) *Agent {
+func NewAgent(basicURL string, pollInterval, reportInterval time.Duration, httpClient *http.Client, signer *crypto.Sha256Signer, rateLimit int, logger *zap.SugaredLogger) *Agent {
 	addr := basicURL
 	if !strings.HasPrefix(addr, "http://") && !strings.HasPrefix(addr, "https://") {
 		addr = "http://" + addr
@@ -39,9 +40,6 @@ func NewAgent(basicURL string, pollInterval, reportInterval time.Duration, httpC
 }
 
 func (a *Agent) Loop(ctx context.Context) {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
 	// Запускаем горутину для того чтобы собирать метрики из runtime
 	go func() {
 		pollTicker := time.NewTicker(a.PollInterval)
@@ -58,13 +56,10 @@ func (a *Agent) Loop(ctx context.Context) {
 	}()
 	// Запускаем горутину для генерации пакетов метрик
 	chInput := a.batchesGenerator(ctx)
-	wp := NewWorkerPool(a.sender, a.RateLimit, chInput)
+	wp := NewWorkerPool(a.sender, a.RateLimit, chInput, a.logger)
 
-	chResult := wp.Start(ctx)
-
-	for result := range chResult {
-		fmt.Println(result)
-	}
+	wp.Start(ctx)
+	wp.Wait()
 }
 
 func (a *Agent) batchesGenerator(ctx context.Context) <-chan Batch {

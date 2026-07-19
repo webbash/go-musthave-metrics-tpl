@@ -2,8 +2,9 @@ package agent
 
 import (
 	"context"
-	"log"
 	"sync"
+
+	"go.uber.org/zap"
 )
 
 type WorkerPool struct {
@@ -11,24 +12,19 @@ type WorkerPool struct {
 	batches <-chan Batch
 	workers int
 	wg      sync.WaitGroup
+	logger  *zap.SugaredLogger
 }
 
-type Result struct {
-	WorkerID int
-	Err      error
-}
-
-func NewWorkerPool(sender *Sender, workers int, batches <-chan Batch) *WorkerPool {
+func NewWorkerPool(sender *Sender, workers int, batches <-chan Batch, logger *zap.SugaredLogger) *WorkerPool {
 	return &WorkerPool{
 		sender:  sender,
 		batches: batches,
 		workers: workers,
+		logger:  logger,
 	}
 }
 
-func (wp *WorkerPool) Start(ctx context.Context) chan Result {
-	resultCh := make(chan Result)
-
+func (wp *WorkerPool) Start(ctx context.Context) {
 	for i := 0; i < wp.workers; i++ {
 		workerID := i
 		wp.wg.Add(1)
@@ -37,23 +33,22 @@ func (wp *WorkerPool) Start(ctx context.Context) chan Result {
 			for {
 				select {
 				case <-ctx.Done():
-					log.Printf("Stopping worker %d", id)
+					wp.logger.Warnw("Stopping worker", "id", id)
 					return
 				case batch, ok := <-wp.batches:
 					if !ok {
+						wp.logger.Warnw("Stopping worker", "id", id)
 						return
 					}
-					err := wp.sender.Send(ctx, batch.Metrics)
-					resultCh <- Result{WorkerID: id, Err: err}
+					if err := wp.sender.Send(ctx, batch.Metrics); err != nil {
+						wp.logger.Errorw("Failed to send request by worker", "id", id)
+					}
 				}
 			}
 		}(workerID)
 	}
+}
 
-	go func() {
-		wp.wg.Wait()
-		close(resultCh)
-	}()
-
-	return resultCh
+func (wp *WorkerPool) Wait() {
+	wp.wg.Wait()
 }

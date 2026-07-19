@@ -9,6 +9,7 @@ import (
 
 	"github.com/caarlos0/env/v11"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/crypto"
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/logger"
 
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/agent"
 )
@@ -64,6 +65,15 @@ func main() {
 		signer = crypto.NewSha256Signer(hashSecret)
 	}
 
-	agent := agent.NewAgent(address, time.Duration(pollInterval)*time.Second, time.Duration(reportInterval)*time.Second, &http.Client{}, signer, rateLimit)
-	agent.Loop(context.Background())
+	sugar := logger.NewLogger()
+
+	agent.NewAgent(
+		address,
+		time.Duration(pollInterval)*time.Second,
+		time.Duration(reportInterval)*time.Second,
+		&http.Client{},
+		signer,
+		rateLimit,
+		sugar,
+	).Loop(context.Background())
 }
