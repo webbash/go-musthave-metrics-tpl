@@ -1,9 +1,7 @@
 package agent
 
 import (
-	"net/http"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -17,13 +15,13 @@ var metricsList = []string{
 	"RandomValue", "PollCount",
 }
 
-func TestAgent_ReadMetrics_NotZero(t *testing.T) {
-	agent := NewAgent("http://localhost", 1*time.Second, 1*time.Second, &http.Client{}, nil)
+func TestRuntimeCollector_Collect_NotZero(t *testing.T) {
+	collector := NewRuntimeCollector()
 
-	agent.ReadMetrics()
+	collector.Collect()
 
-	assert.Len(t, agent.gaugeMetrics, len(metricsList)-1) // -1 т.к нам нужно учесть ещё и counter
-	assert.Len(t, agent.counterMetrics, 1)
+	assert.Len(t, collector.gaugeMetrics, len(metricsList)-1) // -1 т.к нам нужно учесть ещё и counter
+	assert.Len(t, collector.counterMetrics, 1)
 
-	assert.Equal(t, int64(1), agent.counterMetrics["PollCount"])
+	assert.Equal(t, int64(1), collector.counterMetrics["PollCount"])
 }
