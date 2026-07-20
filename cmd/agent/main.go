@@ -5,6 +5,9 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/caarlos0/env/v11"
@@ -66,6 +69,10 @@ func main() {
 	}
 
 	sugar := logger.NewLogger()
+	defer sugar.Sync()
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	agent.NewAgent(
 		address,
@@ -75,5 +82,5 @@ func main() {
 		signer,
 		rateLimit,
 		sugar,
-	).Loop(context.Background())
+	).Loop(ctx)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/crypto"
@@ -12,12 +13,13 @@ import (
 )
 
 type Agent struct {
-	PollInterval     time.Duration
-	ReportInterval   time.Duration
-	RateLimit        int
-	sender           *Sender
-	runtimeCollector *RuntimeCollector
-	logger           *zap.SugaredLogger
+	PollInterval      time.Duration
+	ReportInterval    time.Duration
+	RateLimit         int
+	sender            *Sender
+	runtimeCollector  *RuntimeCollector
+	gopsutilCollector *GopsutilCollector
+	logger            *zap.SugaredLogger
 }
 
 type Batch struct {
@@ -31,19 +33,28 @@ func NewAgent(basicURL string, pollInterval, reportInterval time.Duration, httpC
 	}
 
 	return &Agent{
-		PollInterval:     pollInterval,
-		ReportInterval:   reportInterval,
-		RateLimit:        rateLimit,
-		sender:           NewSender(httpClient, addr, signer),
-		runtimeCollector: NewRuntimeCollector(),
+		PollInterval:      pollInterval,
+		ReportInterval:    reportInterval,
+		RateLimit:         rateLimit,
+		sender:            NewSender(httpClient, addr, signer),
+		logger:            logger,
+		runtimeCollector:  NewRuntimeCollector(),
+		gopsutilCollector: NewGopsutilCollector(),
 	}
 }
 
 func (a *Agent) Loop(ctx context.Context) {
+	wg := sync.WaitGroup{}
+
 	// Запускаем горутину для того чтобы собирать метрики из runtime
+	wg.Add(1)
 	go func() {
 		pollTicker := time.NewTicker(a.PollInterval)
 		defer pollTicker.Stop()
+		defer func() {
+			a.logger.Infow("runtime collector has finished")
+			wg.Done()
+		}()
 
 		for {
 			select {
@@ -54,19 +65,47 @@ func (a *Agent) Loop(ctx context.Context) {
 			}
 		}
 	}()
+	// Запускаем горутину для того чтобы собирать метрики из gopsutil
+	wg.Add(1)
+	go func() {
+		pollTicker := time.NewTicker(a.PollInterval)
+		defer pollTicker.Stop()
+		defer func() {
+			a.logger.Infow("gopsutil collector has finished")
+			wg.Done()
+		}()
+
+		for {
+			select {
+			case <-pollTicker.C:
+				err := a.gopsutilCollector.Collect()
+				if err != nil {
+					a.logger.Errorw("failed to get gopsutil metrics", "err", err)
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
 	// Запускаем горутину для генерации пакетов метрик
 	chInput := a.batchesGenerator(ctx)
 	wp := NewWorkerPool(a.sender, a.RateLimit, chInput, a.logger)
 
 	wp.Start(ctx)
+
 	wp.Wait()
+	wg.Wait()
 }
 
 func (a *Agent) batchesGenerator(ctx context.Context) <-chan Batch {
 	inputCh := make(chan Batch)
 
 	go func() {
-		defer close(inputCh)
+		defer func() {
+			close(inputCh)
+			a.logger.Infow("channel inputCh closing...")
+		}()
 
 		pollTicker := time.NewTicker(a.ReportInterval)
 		defer pollTicker.Stop()
@@ -74,7 +113,10 @@ func (a *Agent) batchesGenerator(ctx context.Context) <-chan Batch {
 		for {
 			select {
 			case <-pollTicker.C:
-				metrics := a.runtimeCollector.Snapshot()
+				runtimeMetrics := a.runtimeCollector.Snapshot()
+				systemMetrics := a.gopsutilCollector.Snapshot()
+
+				metrics := append(runtimeMetrics, systemMetrics...)
 				inputCh <- Batch{Metrics: metrics}
 			case <-ctx.Done():
 				return

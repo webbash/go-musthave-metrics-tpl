@@ -29,7 +29,13 @@ func (wp *WorkerPool) Start(ctx context.Context) {
 		workerID := i
 		wp.wg.Add(1)
 		go func(id int) {
-			defer wp.wg.Done()
+			defer func() {
+				wp.logger.Infow(
+					"worker stopped",
+					"worker", id,
+				)
+				wp.wg.Done()
+			}()
 			for {
 				select {
 				case <-ctx.Done():
