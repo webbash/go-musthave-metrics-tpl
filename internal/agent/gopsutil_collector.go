@@ -21,7 +21,10 @@ func NewGopsutilCollector() *GopsutilCollector {
 }
 
 func (g *GopsutilCollector) Collect() error {
-	v, _ := mem.VirtualMemory()
+	v, err := mem.VirtualMemory()
+	if err != nil {
+		return fmt.Errorf("failed to get virtual memory: %w", err)
+	}
 	values, err := cpu.Percent(0, true)
 	if err != nil {
 		return fmt.Errorf("failed to get cpu percents: %w", err)

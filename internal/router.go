@@ -50,7 +50,7 @@ func (r *Router) Init() *chi.Mux {
 	r.router.Use(middleware.LoggingMiddleware(r.logger))
 	r.router.Use(middleware.GzipMiddleware())
 	if r.cfg.HashSecret != "" {
-		signer := crypto.NewSha256Signer(r.cfg.HashSecret)
+		signer := crypto.NewSHA256Signer(r.cfg.HashSecret)
 		r.router.Use(middleware.HashCheckMiddleware(signer, r.logger))
 	}
 

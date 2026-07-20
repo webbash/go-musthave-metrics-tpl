@@ -63,9 +63,9 @@ func main() {
 		rateLimit = cfg.RateLimit
 	}
 
-	var signer *crypto.Sha256Signer
+	var signer *crypto.SHA256Signer
 	if hashSecret != "" {
-		signer = crypto.NewSha256Signer(hashSecret)
+		signer = crypto.NewSHA256Signer(hashSecret)
 	}
 
 	sugar := logger.NewLogger()

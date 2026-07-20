@@ -26,7 +26,7 @@ type Batch struct {
 	Metrics []models.Metrics
 }
 
-func NewAgent(basicURL string, pollInterval, reportInterval time.Duration, httpClient *http.Client, signer *crypto.Sha256Signer, rateLimit int, logger *zap.SugaredLogger) *Agent {
+func NewAgent(basicURL string, pollInterval, reportInterval time.Duration, httpClient *http.Client, signer *crypto.SHA256Signer, rateLimit int, logger *zap.SugaredLogger) *Agent {
 	addr := basicURL
 	if !strings.HasPrefix(addr, "http://") && !strings.HasPrefix(addr, "https://") {
 		addr = "http://" + addr
@@ -116,8 +116,13 @@ func (a *Agent) batchesGenerator(ctx context.Context) <-chan Batch {
 				runtimeMetrics := a.runtimeCollector.Snapshot()
 				systemMetrics := a.gopsutilCollector.Snapshot()
 
-				metrics := append(runtimeMetrics, systemMetrics...)
-				inputCh <- Batch{Metrics: metrics}
+				batch := Batch{Metrics: append(runtimeMetrics, systemMetrics...)}
+
+				select {
+				case inputCh <- batch:
+				case <-ctx.Done():
+					return
+				}
 			case <-ctx.Done():
 				return
 			}

@@ -20,10 +20,10 @@ import (
 type Sender struct {
 	httpClient *http.Client
 	baseURL    string
-	signer     *crypto.Sha256Signer
+	signer     *crypto.SHA256Signer
 }
 
-func NewSender(httpClient *http.Client, baseURL string, signer *crypto.Sha256Signer) *Sender {
+func NewSender(httpClient *http.Client, baseURL string, signer *crypto.SHA256Signer) *Sender {
 	return &Sender{
 		httpClient: httpClient,
 		baseURL:    baseURL,

@@ -6,15 +6,15 @@ import (
 	"encoding/hex"
 )
 
-type Sha256Signer struct {
+type SHA256Signer struct {
 	key []byte
 }
 
-func NewSha256Signer(key string) *Sha256Signer {
-	return &Sha256Signer{key: []byte(key)}
+func NewSHA256Signer(key string) *SHA256Signer {
+	return &SHA256Signer{key: []byte(key)}
 }
 
-func (s *Sha256Signer) Sign(data []byte) string {
+func (s *SHA256Signer) Sign(data []byte) string {
 	h := hmac.New(sha256.New, s.key)
 	h.Write(data)
 	dst := h.Sum(nil)
@@ -22,7 +22,7 @@ func (s *Sha256Signer) Sign(data []byte) string {
 	return hex.EncodeToString(dst)
 }
 
-func (s *Sha256Signer) Verify(data []byte, hash string) bool {
+func (s *SHA256Signer) Verify(data []byte, hash string) bool {
 	expected := s.Sign(data)
 
 	return hmac.Equal([]byte(expected), []byte(hash))
