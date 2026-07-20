@@ -25,7 +25,7 @@ func (h *hashResponseWriter) WriteHeader(statusCode int) {
 	h.statusCode = statusCode
 }
 
-func HashCheckMiddleware(signer *crypto.Sha256Signer, logger *zap.SugaredLogger) func(http.Handler) http.Handler {
+func HashCheckMiddleware(signer *crypto.SHA256Signer, logger *zap.SugaredLogger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			hash := r.Header.Get("HashSHA256")
@@ -52,11 +52,16 @@ func HashCheckMiddleware(signer *crypto.Sha256Signer, logger *zap.SugaredLogger)
 
 			next.ServeHTTP(wh, r)
 
+			for key, values := range wh.Header() {
+				for _, value := range values {
+					w.Header().Add(key, value)
+				}
+			}
+
 			newHash := signer.Sign(wh.body.Bytes())
-
 			w.Header().Set("HashSHA256", newHash)
-
 			w.WriteHeader(wh.statusCode)
+
 			_, err = w.Write(wh.body.Bytes())
 			if err != nil {
 				logger.Errorw("failed to write response", "error", err)
