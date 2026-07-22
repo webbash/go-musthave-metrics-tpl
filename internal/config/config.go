@@ -12,6 +12,7 @@ type Config struct {
 	StoreInterval   int
 	FileStoragePath string
 	DatabaseDSN     string
+	HashSecret      string
 }
 
 func NewConfig() Config {
@@ -22,6 +23,7 @@ func NewConfig() Config {
 	flag.StringVar(&cfg.FileStoragePath, "f", "./tmp/temporary.json", "file memRepository path")
 	flag.BoolVar(&cfg.Restore, "r", false, "restore metrics from file")
 	flag.StringVar(&cfg.DatabaseDSN, "d", "", "DB connection string")
+	flag.StringVar(&cfg.HashSecret, "k", "", "Hash secret for receiving metrics")
 
 	flag.Parse()
 
@@ -47,6 +49,10 @@ func NewConfig() Config {
 		if r, err := strconv.ParseBool(envRestore); err == nil {
 			cfg.Restore = r
 		}
+	}
+
+	if envSecret, ok := os.LookupEnv("KEY"); ok {
+		cfg.HashSecret = envSecret
 	}
 
 	return cfg

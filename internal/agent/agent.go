@@ -1,163 +1,133 @@
 package agent
 
 import (
-	"bytes"
-	"compress/gzip"
 	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"math/rand"
-	"net"
 	"net/http"
-	"net/url"
-	"runtime"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/crypto"
 	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
-	"github.com/webbash/go-musthave-metrics-tpl.git/internal/retry"
+	"go.uber.org/zap"
 )
 
 type Agent struct {
-	PollInterval   time.Duration
-	ReportInterval time.Duration
-	gaugeMetrics   map[string]float64
-	counterMetrics map[string]int64
-	ms             runtime.MemStats
-	httpClient     *http.Client
-	basicURL       string
+	PollInterval      time.Duration
+	ReportInterval    time.Duration
+	RateLimit         int
+	sender            *Sender
+	runtimeCollector  *RuntimeCollector
+	gopsutilCollector *GopsutilCollector
+	logger            *zap.SugaredLogger
 }
 
-func NewAgent(basicURL string, pollInterval, reportInterval time.Duration, httpClient *http.Client) *Agent {
+type Batch struct {
+	Metrics []models.Metrics
+}
+
+func NewAgent(basicURL string, pollInterval, reportInterval time.Duration, httpClient *http.Client, signer *crypto.SHA256Signer, rateLimit int, logger *zap.SugaredLogger) *Agent {
 	addr := basicURL
 	if !strings.HasPrefix(addr, "http://") && !strings.HasPrefix(addr, "https://") {
 		addr = "http://" + addr
 	}
 
 	return &Agent{
-		PollInterval:   pollInterval,
-		ReportInterval: reportInterval,
-		gaugeMetrics:   make(map[string]float64),
-		counterMetrics: make(map[string]int64),
-		httpClient:     httpClient,
-		basicURL:       addr,
+		PollInterval:      pollInterval,
+		ReportInterval:    reportInterval,
+		RateLimit:         rateLimit,
+		sender:            NewSender(httpClient, addr, signer),
+		logger:            logger,
+		runtimeCollector:  NewRuntimeCollector(),
+		gopsutilCollector: NewGopsutilCollector(),
 	}
 }
 
-func (a *Agent) ReadMetrics() {
-	runtime.ReadMemStats(&a.ms)
+func (a *Agent) Loop(ctx context.Context) {
+	wg := sync.WaitGroup{}
 
-	a.gaugeMetrics["Alloc"] = float64(a.ms.Alloc)
-	a.gaugeMetrics["BuckHashSys"] = float64(a.ms.BuckHashSys)
-	a.gaugeMetrics["Frees"] = float64(a.ms.Frees)
-	a.gaugeMetrics["GCCPUFraction"] = float64(a.ms.GCCPUFraction)
-	a.gaugeMetrics["GCSys"] = float64(a.ms.GCSys)
-	a.gaugeMetrics["HeapAlloc"] = float64(a.ms.HeapAlloc)
-	a.gaugeMetrics["HeapIdle"] = float64(a.ms.HeapIdle)
-	a.gaugeMetrics["HeapInuse"] = float64(a.ms.HeapInuse)
-	a.gaugeMetrics["HeapObjects"] = float64(a.ms.HeapObjects)
-	a.gaugeMetrics["HeapReleased"] = float64(a.ms.HeapReleased)
-	a.gaugeMetrics["HeapSys"] = float64(a.ms.HeapSys)
-	a.gaugeMetrics["LastGC"] = float64(a.ms.LastGC)
-	a.gaugeMetrics["Lookups"] = float64(a.ms.Lookups)
-	a.gaugeMetrics["MCacheInuse"] = float64(a.ms.MCacheInuse)
-	a.gaugeMetrics["MCacheSys"] = float64(a.ms.MCacheSys)
-	a.gaugeMetrics["MSpanInuse"] = float64(a.ms.MSpanInuse)
-	a.gaugeMetrics["MSpanSys"] = float64(a.ms.MSpanSys)
-	a.gaugeMetrics["Mallocs"] = float64(a.ms.Mallocs)
-	a.gaugeMetrics["NextGC"] = float64(a.ms.NextGC)
-	a.gaugeMetrics["NumForcedGC"] = float64(a.ms.NumForcedGC)
-	a.gaugeMetrics["NumGC"] = float64(a.ms.NumGC)
-	a.gaugeMetrics["OtherSys"] = float64(a.ms.OtherSys)
-	a.gaugeMetrics["PauseTotalNs"] = float64(a.ms.PauseTotalNs)
-	a.gaugeMetrics["StackInuse"] = float64(a.ms.StackInuse)
-	a.gaugeMetrics["StackSys"] = float64(a.ms.StackSys)
-	a.gaugeMetrics["Sys"] = float64(a.ms.Sys)
-	a.gaugeMetrics["TotalAlloc"] = float64(a.ms.TotalAlloc)
-	a.gaugeMetrics["RandomValue"] = rand.Float64()
+	// Запускаем горутину для того чтобы собирать метрики из runtime
+	wg.Add(1)
+	go func() {
+		pollTicker := time.NewTicker(a.PollInterval)
+		defer pollTicker.Stop()
+		defer func() {
+			a.logger.Infow("runtime collector has finished")
+			wg.Done()
+		}()
 
-	a.counterMetrics["PollCount"] += 1
-}
-
-func (a *Agent) SendMetrics() error {
-	var metricsToSend []models.Metrics
-	for metricName, value := range a.gaugeMetrics {
-		metricsToSend = append(metricsToSend, models.Metrics{
-			ID:    metricName,
-			MType: models.Gauge,
-			Value: &value,
-		})
-	}
-	for metricName, value := range a.counterMetrics {
-		metricsToSend = append(metricsToSend, models.Metrics{
-			ID:    metricName,
-			MType: models.Counter,
-			Delta: &value,
-		})
-	}
-
-	err := retry.Do(context.Background(), func() error {
-		return a.sendUpdateMetrics(metricsToSend)
-	}, func(err error) bool {
-		if err == nil {
-			return false
+		for {
+			select {
+			case <-pollTicker.C:
+				a.runtimeCollector.Collect()
+			case <-ctx.Done():
+				return
+			}
 		}
+	}()
+	// Запускаем горутину для того чтобы собирать метрики из gopsutil
+	wg.Add(1)
+	go func() {
+		pollTicker := time.NewTicker(a.PollInterval)
+		defer pollTicker.Stop()
+		defer func() {
+			a.logger.Infow("gopsutil collector has finished")
+			wg.Done()
+		}()
 
-		var netErr net.Error
-		return errors.As(err, &netErr)
-	}, []time.Duration{
-		1 * time.Second,
-		3 * time.Second,
-		5 * time.Second,
-	})
+		for {
+			select {
+			case <-pollTicker.C:
+				err := a.gopsutilCollector.Collect()
+				if err != nil {
+					a.logger.Errorw("failed to get gopsutil metrics", "err", err)
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 
-	if err != nil {
-		return fmt.Errorf("error sending metrics: %w", err)
-	}
+	// Запускаем горутину для генерации пакетов метрик
+	chInput := a.batchesGenerator(ctx)
+	wp := NewWorkerPool(a.sender, a.RateLimit, chInput, a.logger)
 
-	return nil
+	wp.Start(ctx)
+
+	wp.Wait()
+	wg.Wait()
 }
 
-func (a *Agent) sendUpdateMetrics(metric []models.Metrics) error {
-	body, err := json.Marshal(metric)
-	if err != nil {
-		return fmt.Errorf("marshal metric: %w", err)
-	}
+func (a *Agent) batchesGenerator(ctx context.Context) <-chan Batch {
+	inputCh := make(chan Batch)
 
-	var buf bytes.Buffer
-	gz := gzip.NewWriter(&buf)
-	if _, err := gz.Write(body); err != nil {
-		return fmt.Errorf("gzip write: %w", err)
-	}
-	err = gz.Close()
-	if err != nil {
-		return fmt.Errorf("gzip closing: %w", err)
-	}
+	go func() {
+		defer func() {
+			close(inputCh)
+			a.logger.Infow("channel inputCh closing...")
+		}()
 
-	updateUrl, err := url.JoinPath(a.basicURL, "/updates")
-	if err != nil {
-		return fmt.Errorf("create url: %w", err)
-	}
+		pollTicker := time.NewTicker(a.ReportInterval)
+		defer pollTicker.Stop()
 
-	req, err := http.NewRequest(http.MethodPost, updateUrl, &buf)
-	if err != nil {
-		return fmt.Errorf("create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept-Encoding", "gzip")
-	req.Header.Set("Content-Encoding", "gzip")
+		for {
+			select {
+			case <-pollTicker.C:
+				runtimeMetrics := a.runtimeCollector.Snapshot()
+				systemMetrics := a.gopsutilCollector.Snapshot()
 
-	resp, err := a.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("send update: %w", err)
-	}
+				batch := Batch{Metrics: append(runtimeMetrics, systemMetrics...)}
 
-	defer resp.Body.Close()
+				select {
+				case inputCh <- batch:
+				case <-ctx.Done():
+					return
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("send update: %d", resp.StatusCode)
-	}
-
-	return nil
+	return inputCh
 }
