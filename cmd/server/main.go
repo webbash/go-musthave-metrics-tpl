@@ -12,6 +12,7 @@ import (
 
 	"github.com/pressly/goose/v3"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal"
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/audit"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/config"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/config/db"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/logger"
@@ -47,11 +48,22 @@ func main() {
 		defer database.Close()
 	}
 
+	obsSubject := audit.NewSubject(sugar)
+	if cfg.AuditFile != "" {
+		fileObserver := audit.NewFileObserver(cfg.AuditFile)
+		obsSubject.AddObserver(fileObserver)
+	}
+
+	if cfg.AuditUrl != "" {
+		httpObserver := audit.NewHTTPObserver(cfg.AuditUrl)
+		obsSubject.AddObserver(httpObserver)
+	}
+
 	fileStorage := storage.NewFileStorage(cfg.FileStoragePath)
 	repo := buildRepository(cfg, sugar, fileStorage, database)
 	metricsService := service.NewMetricsService(repo)
 
-	r := internal.NewRouter(cfg, sugar, metricsService, repo, database).Init()
+	r := internal.NewRouter(cfg, sugar, metricsService, repo, database, obsSubject).Init()
 
 	srv := &http.Server{
 		Addr:         cfg.Address,

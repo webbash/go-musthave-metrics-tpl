@@ -8,8 +8,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/audit"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/repository"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
+	"go.uber.org/zap"
 )
 
 func TestHandler_ServeHTTP(t *testing.T) {
@@ -66,7 +68,9 @@ func TestHandler_ServeHTTP(t *testing.T) {
 
 	storage := repository.NewMemStorage()
 	metricsService := service.NewMetricsService(storage)
-	handler := NewHandler(metricsService)
+	logger := &zap.SugaredLogger{}
+	subject := audit.NewSubject(logger)
+	handler := NewHandler(metricsService, subject, logger)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

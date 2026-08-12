@@ -4,19 +4,27 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
+	"time"
 
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/audit"
 	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
+	"go.uber.org/zap"
 )
 
 type Handler struct {
 	service metricsService
+	subject *audit.Subject
+	logger  *zap.SugaredLogger
 }
 
-func NewHandler(service metricsService) *Handler {
+func NewHandler(service metricsService, subject *audit.Subject, logger *zap.SugaredLogger) *Handler {
 	return &Handler{
 		service: service,
+		subject: subject,
+		logger:  logger,
 	}
 }
 
@@ -61,6 +69,21 @@ func (h Handler) ServeHTTP(res http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(res, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	ipAddress, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		ipAddress = r.RemoteAddr
+	}
+
+	event := audit.Event{
+		TS:        time.Now().Unix(),
+		Metrics:   []string{metric.MType},
+		IPAddress: ipAddress,
+	}
+	err = h.subject.Notify(event)
+	if err != nil {
+		h.logger.Errorw("failed to notify subject", "err", err)
 	}
 
 	res.WriteHeader(http.StatusOK)

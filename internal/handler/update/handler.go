@@ -2,19 +2,27 @@ package update
 
 import (
 	"errors"
+	"net"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/audit"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
+	"go.uber.org/zap"
 )
 
 type Handler struct {
 	service metricsService
+	subject *audit.Subject
+	logger  *zap.SugaredLogger
 }
 
-func NewHandler(service metricsService) *Handler {
+func NewHandler(service metricsService, subject *audit.Subject, logger *zap.SugaredLogger) *Handler {
 	return &Handler{
 		service: service,
+		subject: subject,
+		logger:  logger,
 	}
 }
 
@@ -36,6 +44,21 @@ func (h Handler) ServeHTTP(res http.ResponseWriter, r *http.Request) {
 
 		http.Error(res, "unknown metric type", http.StatusNotImplemented)
 		return
+	}
+
+	ipAddress, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		ipAddress = r.RemoteAddr
+	}
+
+	event := audit.Event{
+		TS:        time.Now().Unix(),
+		Metrics:   []string{mName},
+		IPAddress: ipAddress,
+	}
+	err = h.subject.Notify(event)
+	if err != nil {
+		h.logger.Errorw("failed to notify subject", "err", err)
 	}
 
 	res.WriteHeader(http.StatusOK)
