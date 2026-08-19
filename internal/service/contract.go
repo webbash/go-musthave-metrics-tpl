@@ -1,3 +1,4 @@
+// Package service contains the business logic for managing metrics.
 package service
 
 import (
@@ -6,6 +7,7 @@ import (
 	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
 )
 
+// MetricsRepository defines persistence operations required by MetricsService.
 type MetricsRepository interface {
 	GetAllGauges(ctx context.Context) (map[string]float64, error)
 	GetAllCounters(ctx context.Context) (map[string]int64, error)
@@ -17,6 +19,7 @@ type MetricsRepository interface {
 	UpdateMany(ctx context.Context, metrics []models.Metrics) error
 }
 
+// MetricsFileStorage persists a collection of metrics outside the repository.
 type MetricsFileStorage interface {
 	Save(metrics []models.Metrics) error
 }

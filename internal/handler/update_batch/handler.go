@@ -1,3 +1,4 @@
+// Package update_batch implements the JSON endpoint for batch metric updates.
 package update_batch
 
 import (
@@ -15,12 +16,14 @@ import (
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
 )
 
+// Handler serves the batch metric update endpoint.
 type Handler struct {
 	service metricsService
 	logger  *zap.SugaredLogger
 	subject *audit.Subject
 }
 
+// NewHandler creates a handler for the batch metric update endpoint.
 func NewHandler(service metricsService, logger *zap.SugaredLogger, subject *audit.Subject) *Handler {
 	return &Handler{
 		service: service,
@@ -29,6 +32,7 @@ func NewHandler(service metricsService, logger *zap.SugaredLogger, subject *audi
 	}
 }
 
+// ServeHTTP handles POST /updates requests containing a JSON metric slice.
 func (h Handler) ServeHTTP(res http.ResponseWriter, r *http.Request) {
 	res.Header().Set("Content-Type", "application/json")
 

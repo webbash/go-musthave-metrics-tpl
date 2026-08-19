@@ -17,12 +17,14 @@ import (
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/retry"
 )
 
+// Sender sends compressed metric batches to the server.
 type Sender struct {
 	httpClient *http.Client
 	baseURL    string
 	signer     *crypto.SHA256Signer
 }
 
+// NewSender creates a metrics sender using httpClient and baseURL.
 func NewSender(httpClient *http.Client, baseURL string, signer *crypto.SHA256Signer) *Sender {
 	return &Sender{
 		httpClient: httpClient,
@@ -31,6 +33,8 @@ func NewSender(httpClient *http.Client, baseURL string, signer *crypto.SHA256Sig
 	}
 }
 
+// Send compresses and sends metrics to the batch update endpoint, retrying
+// temporary network failures.
 func (a *Sender) Send(ctx context.Context, metrics []models.Metrics) error {
 	err := retry.Do(ctx, func() error {
 		return a.sendMetrics(ctx, metrics)

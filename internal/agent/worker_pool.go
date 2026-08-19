@@ -7,6 +7,7 @@ import (
 	"go.uber.org/zap"
 )
 
+// WorkerPool sends metric batches concurrently using a fixed number of workers.
 type WorkerPool struct {
 	sender  *Sender
 	batches <-chan Batch
@@ -15,6 +16,7 @@ type WorkerPool struct {
 	logger  *zap.SugaredLogger
 }
 
+// NewWorkerPool creates a pool with the specified number of concurrent senders.
 func NewWorkerPool(sender *Sender, workers int, batches <-chan Batch, logger *zap.SugaredLogger) *WorkerPool {
 	return &WorkerPool{
 		sender:  sender,
@@ -24,6 +26,7 @@ func NewWorkerPool(sender *Sender, workers int, batches <-chan Batch, logger *za
 	}
 }
 
+// Start launches the configured workers.
 func (wp *WorkerPool) Start(ctx context.Context) {
 	for i := 0; i < wp.workers; i++ {
 		workerID := i
@@ -55,6 +58,7 @@ func (wp *WorkerPool) Start(ctx context.Context) {
 	}
 }
 
+// Wait blocks until all workers have stopped.
 func (wp *WorkerPool) Wait() {
 	wp.wg.Wait()
 }

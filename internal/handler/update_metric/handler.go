@@ -1,3 +1,4 @@
+// Package update_metric implements the JSON endpoint for updating one metric.
 package update_metric
 
 import (
@@ -15,12 +16,14 @@ import (
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
 )
 
+// Handler serves the JSON metric update endpoint.
 type Handler struct {
 	service metricsService
 	subject *audit.Subject
 	logger  *zap.SugaredLogger
 }
 
+// NewHandler creates a handler for the JSON metric update endpoint.
 func NewHandler(service metricsService, subject *audit.Subject, logger *zap.SugaredLogger) *Handler {
 	return &Handler{
 		service: service,
@@ -29,6 +32,7 @@ func NewHandler(service metricsService, subject *audit.Subject, logger *zap.Suga
 	}
 }
 
+// ServeHTTP handles POST /update requests containing one metric in JSON.
 func (h Handler) ServeHTTP(res http.ResponseWriter, r *http.Request) {
 	res.Header().Set("Content-Type", "application/json")
 

@@ -1,3 +1,4 @@
+// Package update implements the legacy endpoint for updating one metric.
 package update
 
 import (
@@ -13,12 +14,14 @@ import (
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
 )
 
+// Handler serves the legacy metric update endpoint.
 type Handler struct {
 	service metricsService
 	subject *audit.Subject
 	logger  *zap.SugaredLogger
 }
 
+// NewHandler creates a handler for the legacy metric update endpoint.
 func NewHandler(service metricsService, subject *audit.Subject, logger *zap.SugaredLogger) *Handler {
 	return &Handler{
 		service: service,
@@ -27,6 +30,7 @@ func NewHandler(service metricsService, subject *audit.Subject, logger *zap.Suga
 	}
 }
 
+// ServeHTTP handles POST /update/{metricType}/{metricName}/{metricValue} requests.
 func (h Handler) ServeHTTP(res http.ResponseWriter, r *http.Request) {
 	mType := chi.URLParam(r, "metricType")
 	mName := chi.URLParam(r, "metricName")

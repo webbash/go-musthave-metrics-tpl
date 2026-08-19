@@ -8,12 +8,14 @@ import (
 	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
 )
 
+// RuntimeCollector stores the latest Go runtime metrics.
 type RuntimeCollector struct {
 	gaugeMetrics   map[string]float64
 	counterMetrics map[string]int64
 	mu             sync.RWMutex
 }
 
+// NewRuntimeCollector creates a collector for Go runtime metrics.
 func NewRuntimeCollector() *RuntimeCollector {
 	return &RuntimeCollector{
 		gaugeMetrics:   make(map[string]float64),
@@ -21,6 +23,7 @@ func NewRuntimeCollector() *RuntimeCollector {
 	}
 }
 
+// Collect reads the current Go runtime memory statistics and increments PollCount.
 func (rc *RuntimeCollector) Collect() {
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
@@ -60,6 +63,7 @@ func (rc *RuntimeCollector) Collect() {
 	rc.counterMetrics["PollCount"] += 1
 }
 
+// Snapshot returns the latest runtime metrics as model values.
 func (rc *RuntimeCollector) Snapshot() []models.Metrics {
 	var metricsToSend []models.Metrics
 

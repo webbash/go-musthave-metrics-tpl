@@ -1,3 +1,4 @@
+// Package get_value_list implements the endpoint that renders all metrics as HTML.
 package get_value_list
 
 import (
@@ -6,16 +7,19 @@ import (
 	"strings"
 )
 
+// Handler serves the HTML metrics list endpoint.
 type Handler struct {
 	repository metricsRepository
 }
 
+// NewHandler creates a handler that reads metrics from repository.
 func NewHandler(repository metricsRepository) *Handler {
 	return &Handler{
 		repository: repository,
 	}
 }
 
+// ServeHTTP handles GET / requests and renders the current metrics as HTML.
 func (h Handler) ServeHTTP(res http.ResponseWriter, r *http.Request) {
 	res.Header().Set("Content-Type", "text/html")
 
