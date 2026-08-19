@@ -20,6 +20,8 @@ import (
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/storage"
 	"go.uber.org/zap"
+
+	_ "net/http/pprof"
 )
 
 func main() {
@@ -79,6 +81,14 @@ func main() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			sugar.Errorw("server closed", "err", err)
 			os.Exit(1)
+		}
+	}()
+
+	go func() {
+		sugar.Infow("starting pprof server", "addr", "localhost:6060")
+
+		if err := http.ListenAndServe("localhost:6060", nil); err != nil {
+			sugar.Errorw("pprof server stopped", "err", err)
 		}
 	}()
 
