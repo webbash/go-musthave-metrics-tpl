@@ -6,6 +6,7 @@ import (
 
 	"github.com/shirou/gopsutil/v4/cpu"
 	"github.com/shirou/gopsutil/v4/mem"
+
 	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
 )
 

@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/pressly/goose/v3"
+	"go.uber.org/zap"
+
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/audit"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/config"
@@ -19,7 +21,6 @@ import (
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/repository"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/storage"
-	"go.uber.org/zap"
 
 	_ "net/http/pprof"
 )

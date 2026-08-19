@@ -7,9 +7,10 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/crypto"
 	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
-	"go.uber.org/zap"
 )
 
 type Agent struct {

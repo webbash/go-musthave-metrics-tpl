@@ -8,10 +8,11 @@ import (
 	"net/http"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/audit"
 	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
-	"go.uber.org/zap"
 )
 
 type Handler struct {

@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
 )
 
