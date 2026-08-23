@@ -25,7 +25,8 @@ func NewSubject(logger *zap.SugaredLogger) *Subject {
 	}
 }
 
-// AddObserver registers an observer to receive subsequent audit events.
+// AddObserver registers an observer and starts a worker that processes events
+// from the observer's queue.
 func (s *Subject) AddObserver(o Observer) {
 	s.channels = append(s.channels, s.addChannel(o))
 }
@@ -48,8 +49,8 @@ func (s *Subject) addChannel(o Observer) chan Event {
 	return ch
 }
 
-// Notify sends an audit event to every registered observer.
-// Observer errors are logged and do not prevent the remaining observers from running.
+// Notify sends an event to each observer's queue without blocking.
+// The event is dropped for an observer if its queue is full.
 func (s *Subject) Notify(e Event) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -69,6 +70,8 @@ func (s *Subject) Notify(e Event) {
 	return
 }
 
+// Close stops accepting new events, closes all observer queues, and waits for
+// their buffered events to be processed.
 func (s *Subject) Close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()

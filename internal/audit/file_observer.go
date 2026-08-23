@@ -13,7 +13,7 @@ type FileObserver struct {
 	mu   *sync.Mutex
 }
 
-// NewFileObserver creates an observer that writes audit events to path.
+// NewFileObserver creates an observer that writes audit events to file.
 func NewFileObserver(file *os.File) *FileObserver {
 	return &FileObserver{
 		file: file,

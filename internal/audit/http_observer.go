@@ -38,7 +38,8 @@ func NewHTTPObserver(url string) *HTTPObserver {
 	}
 }
 
-// Observe sends an audit event to the configured HTTP endpoint.
+// Observe sends an audit event to the configured HTTP endpoint, retrying
+// network errors and 5xx responses.
 func (o *HTTPObserver) Observe(e Event) error {
 	body, err := json.Marshal(e)
 	if err != nil {
