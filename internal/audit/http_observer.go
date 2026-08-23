@@ -8,11 +8,13 @@ import (
 	"time"
 )
 
+// HTTPObserver sends audit events as JSON to an HTTP endpoint.
 type HTTPObserver struct {
 	url    string
 	client *http.Client
 }
 
+// NewHTTPObserver creates an observer that sends audit events to url.
 func NewHTTPObserver(url string) *HTTPObserver {
 	return &HTTPObserver{
 		url: url,
@@ -22,6 +24,7 @@ func NewHTTPObserver(url string) *HTTPObserver {
 	}
 }
 
+// Observe sends an audit event to the configured HTTP endpoint.
 func (o *HTTPObserver) Observe(e Event) error {
 	body, err := json.Marshal(e)
 	if err != nil {

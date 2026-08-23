@@ -6,16 +6,19 @@ import (
 	"os"
 )
 
+// FileObserver appends audit events to a file as newline-delimited JSON.
 type FileObserver struct {
 	path string
 }
 
+// NewFileObserver creates an observer that writes audit events to path.
 func NewFileObserver(path string) *FileObserver {
 	return &FileObserver{
 		path: path,
 	}
 }
 
+// Observe appends an audit event to the configured file.
 func (o *FileObserver) Observe(e Event) error {
 	data, err := json.Marshal(e)
 	if err != nil {
