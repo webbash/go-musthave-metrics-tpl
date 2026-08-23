@@ -39,24 +39,6 @@ func (h Handler) ServeHTTP(res http.ResponseWriter, r *http.Request) {
 	res.Write([]byte(html))
 }
 
-func buildHTMLConcat(
-	gauges map[string]float64,
-	counters map[string]int64,
-) string {
-	html := "<html><body><h1>Metrics List</h1><ul>"
-
-	for name, value := range gauges {
-		html += fmt.Sprintf("<li>%s: %g</li>", name, value)
-	}
-
-	for name, value := range counters {
-		html += fmt.Sprintf("<li>%s: %d</li>", name, value)
-	}
-
-	html += "</ul></body></html>"
-	return html
-}
-
 func buildHTMLBuilder(
 	gauges map[string]float64,
 	counters map[string]int64,

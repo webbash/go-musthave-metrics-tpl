@@ -2,6 +2,7 @@ package get_value_list
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -48,12 +49,12 @@ func BenchmarkHandler_buildHTML(b *testing.B) {
 	gauges, counters := benchmarkMetrics()
 
 	b.Run("concat", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			buildHTMLConcat(gauges, counters)
 		}
 	})
 	b.Run("builder", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			buildHTMLBuilder(gauges, counters)
 		}
 	})
@@ -70,4 +71,22 @@ func benchmarkMetrics() (map[string]float64, map[string]int64) {
 	}
 
 	return gauges, counters
+}
+
+func buildHTMLConcat(
+	gauges map[string]float64,
+	counters map[string]int64,
+) string {
+	html := "<html><body><h1>Metrics List</h1><ul>"
+
+	for name, value := range gauges {
+		html += fmt.Sprintf("<li>%s: %g</li>", name, value)
+	}
+
+	for name, value := range counters {
+		html += fmt.Sprintf("<li>%s: %d</li>", name, value)
+	}
+
+	html += "</ul></body></html>"
+	return html
 }
