@@ -4,17 +4,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sync"
 )
 
 // FileObserver appends audit events to a file as newline-delimited JSON.
 type FileObserver struct {
-	path string
+	file *os.File
+	mu   *sync.Mutex
 }
 
 // NewFileObserver creates an observer that writes audit events to path.
-func NewFileObserver(path string) *FileObserver {
+func NewFileObserver(file *os.File) *FileObserver {
 	return &FileObserver{
-		path: path,
+		file: file,
+		mu:   &sync.Mutex{},
 	}
 }
 
@@ -27,17 +30,10 @@ func (o *FileObserver) Observe(e Event) error {
 
 	data = append(data, '\n')
 
-	file, err := os.OpenFile(
-		o.path,
-		os.O_CREATE|os.O_WRONLY|os.O_APPEND,
-		0644,
-	)
-	if err != nil {
-		return fmt.Errorf("open audit file: %w", err)
-	}
-	defer file.Close()
+	o.mu.Lock()
+	defer o.mu.Unlock()
 
-	if _, err := file.Write(data); err != nil {
+	if _, err := o.file.Write(data); err != nil {
 		return fmt.Errorf("write audit event: %w", err)
 	}
 

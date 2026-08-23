@@ -70,20 +70,17 @@ func (h Handler) ServeHTTP(res http.ResponseWriter, r *http.Request) {
 		ipAddress = r.RemoteAddr
 	}
 
-	metricTypes := make([]string, len(metrics))
+	metricNames := make([]string, len(metrics))
 	for i, metric := range metrics {
-		metricTypes[i] = metric.MType
+		metricNames[i] = metric.ID
 	}
 
 	event := audit.Event{
 		TS:        time.Now().Unix(),
-		Metrics:   metricTypes,
+		Metrics:   metricNames,
 		IPAddress: ipAddress,
 	}
-	err = h.subject.Notify(event)
-	if err != nil {
-		h.logger.Errorw("failed to notify subject", "err", err)
-	}
+	h.subject.Notify(event)
 
 	res.WriteHeader(http.StatusOK)
 }

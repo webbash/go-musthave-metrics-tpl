@@ -1,13 +1,17 @@
 package audit
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,54 +32,223 @@ func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) 
 
 func TestFileObserver(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.log")
-	event := Event{TS: 1, Metrics: []string{"temperature"}, IPAddress: "127.0.0.1"}
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = file.Close()
+	})
 
-	require.NoError(t, NewFileObserver(path).Observe(event))
+	event := Event{TS: 1, Metrics: []string{"temperature"}, IPAddress: "127.0.0.1"}
+	observer := NewFileObserver(file)
+
+	require.NoError(t, observer.Observe(event))
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
 	assert.Contains(t, string(data), `"temperature"`)
 
-	err = NewFileObserver(filepath.Join(t.TempDir(), "missing", "audit.log")).Observe(event)
-	assert.Error(t, err)
+	require.NoError(t, file.Close())
+	assert.Error(t, observer.Observe(event))
 }
 
-func TestHTTPObserver(t *testing.T) {
+func TestFileObserverConcurrent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "audit.log")
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = file.Close()
+	})
+
+	observer := NewFileObserver(file)
+	const eventCount = 100
+
+	var wg sync.WaitGroup
+	errs := make(chan error, eventCount)
+	for range eventCount {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs <- observer.Observe(Event{TS: 1, Metrics: []string{"temperature"}})
+		}()
+	}
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		require.NoError(t, err)
+	}
+
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	require.Len(t, lines, eventCount)
+	for _, line := range lines {
+		var event Event
+		require.NoError(t, json.Unmarshal([]byte(line), &event))
+		assert.Equal(t, []string{"temperature"}, event.Metrics)
+	}
+}
+
+func TestHTTPObserverSuccess(t *testing.T) {
 	event := Event{TS: 1, Metrics: []string{"temperature"}}
-	observer := NewHTTPObserver("http://audit.test/events")
-	observer.client = &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+	observer := newTestHTTPObserver(roundTripFunc(func(request *http.Request) (*http.Response, error) {
 		assert.Equal(t, http.MethodPost, request.Method)
 		assert.Equal(t, "application/json", request.Header.Get("Content-Type"))
 		body, err := io.ReadAll(request.Body)
 		require.NoError(t, err)
 		assert.Contains(t, string(body), "temperature")
-		return &http.Response{StatusCode: http.StatusOK, Status: "200 OK", Body: io.NopCloser(strings.NewReader(""))}, nil
-	})}
+		return response(http.StatusOK), nil
+	}))
+
 	require.NoError(t, observer.Observe(event))
+}
 
+func TestHTTPObserverRetriesServerFailure(t *testing.T) {
+	observer := NewHTTPObserver("http://audit.test/events")
+	observer.retryIntervals = []time.Duration{0, 0, 0}
+	calls := 0
 	observer.client = &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
-		return &http.Response{StatusCode: http.StatusBadGateway, Status: "502 Bad Gateway", Body: io.NopCloser(strings.NewReader(""))}, nil
+		calls++
+		return response(http.StatusBadGateway), nil
 	})}
-	assert.Error(t, observer.Observe(event))
 
+	err := observer.Observe(Event{})
+	require.ErrorIs(t, err, errServerFailure)
+	assert.Contains(t, err.Error(), "502 Bad Gateway")
+	assert.Equal(t, 4, calls)
+}
+
+func TestHTTPObserverRetriesConnectionFailure(t *testing.T) {
+	observer := NewHTTPObserver("http://audit.test/events")
+	observer.retryIntervals = []time.Duration{0, 0, 0}
+	calls := 0
 	observer.client = &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		calls++
 		return nil, errors.New("connection refused")
 	})}
-	assert.Error(t, observer.Observe(event))
 
-	assert.Error(t, NewHTTPObserver("://invalid").Observe(event))
+	err := observer.Observe(Event{})
+	require.ErrorIs(t, err, errConnectionFailure)
+	assert.Contains(t, err.Error(), "connection refused")
+	assert.Equal(t, 4, calls)
+}
+
+func TestHTTPObserverDoesNotRetryClientFailure(t *testing.T) {
+	observer := NewHTTPObserver("http://audit.test/events")
+	observer.retryIntervals = []time.Duration{0, 0, 0}
+	calls := 0
+	observer.client = &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		calls++
+		return response(http.StatusBadRequest), nil
+	})}
+
+	err := observer.Observe(Event{})
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, errServerFailure)
+	assert.Equal(t, 1, calls)
+}
+
+func TestHTTPObserverInvalidURL(t *testing.T) {
+	assert.Error(t, NewHTTPObserver("://invalid").Observe(Event{}))
+}
+
+func newTestHTTPObserver(transport http.RoundTripper) *HTTPObserver {
+	observer := NewHTTPObserver("http://audit.test/events")
+	observer.client = &http.Client{Transport: transport}
+	observer.retryIntervals = []time.Duration{0, 0, 0}
+	return observer
+}
+
+func response(statusCode int) *http.Response {
+	return &http.Response{
+		StatusCode: statusCode,
+		Status:     fmt.Sprintf("%d %s", statusCode, http.StatusText(statusCode)),
+		Body:       io.NopCloser(strings.NewReader("")),
+	}
 }
 
 func TestSubjectNotify(t *testing.T) {
 	subject := NewSubject(zap.NewNop().Sugar())
-	called := false
-	subject.AddObserver(observerFunc(func(Event) error {
-		called = true
+	t.Cleanup(subject.Close)
+
+	firstObserverEvents := make(chan Event, 1)
+	secondObserverEvents := make(chan Event, 1)
+
+	subject.AddObserver(observerFunc(func(event Event) error {
+		firstObserverEvents <- event
 		return nil
 	}))
-	subject.AddObserver(observerFunc(func(Event) error {
+	subject.AddObserver(observerFunc(func(event Event) error {
+		secondObserverEvents <- event
 		return errors.New("observer failed")
 	}))
 
-	require.NoError(t, subject.Notify(Event{}))
-	assert.True(t, called)
+	want := Event{TS: 1, Metrics: []string{"temperature"}, IPAddress: "127.0.0.1"}
+	subject.Notify(want)
+
+	assert.Equal(t, want, receiveEvent(t, firstObserverEvents))
+	assert.Equal(t, want, receiveEvent(t, secondObserverEvents))
+}
+
+func TestSubjectCloseDrainsBufferedEvents(t *testing.T) {
+	subject := NewSubject(zap.NewNop().Sugar())
+	processed := make(chan Event, 3)
+	subject.AddObserver(observerFunc(func(event Event) error {
+		processed <- event
+		return nil
+	}))
+
+	for i := range 3 {
+		subject.Notify(Event{TS: int64(i)})
+	}
+
+	subject.Close()
+	subject.Close()
+
+	require.Len(t, processed, 3)
+	subject.Notify(Event{TS: 4})
+	assert.Len(t, processed, 3)
+}
+
+func TestSubjectNotifyDropsEventWhenChannelIsFull(t *testing.T) {
+	subject := NewSubject(zap.NewNop().Sugar())
+	started := make(chan struct{})
+	release := make(chan struct{})
+	processed := make(chan Event, 6)
+	var startOnce sync.Once
+
+	subject.AddObserver(observerFunc(func(event Event) error {
+		startOnce.Do(func() { close(started) })
+		<-release
+		processed <- event
+		return nil
+	}))
+
+	subject.Notify(Event{TS: 1})
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("observer did not start")
+	}
+
+	for i := 2; i <= 6; i++ {
+		subject.Notify(Event{TS: int64(i)})
+	}
+	subject.Notify(Event{TS: 7})
+
+	close(release)
+	subject.Close()
+
+	assert.Len(t, processed, 6)
+}
+
+func receiveEvent(t *testing.T, events <-chan Event) Event {
+	t.Helper()
+
+	select {
+	case event := <-events:
+		return event
+	case <-time.After(time.Second):
+		t.Fatal("observer did not receive event")
+		return Event{}
+	}
 }

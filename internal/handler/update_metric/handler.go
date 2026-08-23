@@ -83,13 +83,10 @@ func (h Handler) ServeHTTP(res http.ResponseWriter, r *http.Request) {
 
 	event := audit.Event{
 		TS:        time.Now().Unix(),
-		Metrics:   []string{metric.MType},
+		Metrics:   []string{metric.ID},
 		IPAddress: ipAddress,
 	}
-	err = h.subject.Notify(event)
-	if err != nil {
-		h.logger.Errorw("failed to notify subject", "err", err)
-	}
+	h.subject.Notify(event)
 
 	res.WriteHeader(http.StatusOK)
 	res.Write(resp)

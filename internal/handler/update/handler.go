@@ -61,10 +61,7 @@ func (h Handler) ServeHTTP(res http.ResponseWriter, r *http.Request) {
 		Metrics:   []string{mName},
 		IPAddress: ipAddress,
 	}
-	err = h.subject.Notify(event)
-	if err != nil {
-		h.logger.Errorw("failed to notify subject", "err", err)
-	}
+	h.subject.Notify(event)
 
 	res.WriteHeader(http.StatusOK)
 }

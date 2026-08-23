@@ -14,7 +14,7 @@ type Config struct {
 	DatabaseDSN     string
 	HashSecret      string
 	AuditFile       string
-	AuditUrl        string
+	AuditURL        string
 }
 
 func NewConfig() Config {
@@ -27,7 +27,7 @@ func NewConfig() Config {
 	flag.StringVar(&cfg.DatabaseDSN, "d", "", "DB connection string")
 	flag.StringVar(&cfg.HashSecret, "k", "", "Hash secret for receiving metrics")
 	flag.StringVar(&cfg.AuditFile, "audit-file", "", "Path to file for audit")
-	flag.StringVar(&cfg.AuditUrl, "audit-url", "", "Url for audit")
+	flag.StringVar(&cfg.AuditURL, "audit-url", "", "Url for audit")
 
 	flag.Parse()
 
@@ -63,8 +63,8 @@ func NewConfig() Config {
 		cfg.AuditFile = envAuditFile
 	}
 
-	if envAuditUrl, ok := os.LookupEnv("AUDIT_URL"); ok {
-		cfg.AuditUrl = envAuditUrl
+	if envAuditURL, ok := os.LookupEnv("AUDIT_URL"); ok {
+		cfg.AuditURL = envAuditURL
 	}
 
 	return cfg

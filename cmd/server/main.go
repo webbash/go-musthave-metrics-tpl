@@ -53,12 +53,22 @@ func main() {
 
 	obsSubject := audit.NewSubject(sugar)
 	if cfg.AuditFile != "" {
-		fileObserver := audit.NewFileObserver(cfg.AuditFile)
-		obsSubject.AddObserver(fileObserver)
+		file, err := os.OpenFile(
+			cfg.AuditFile,
+			os.O_CREATE|os.O_WRONLY|os.O_APPEND,
+			0644,
+		)
+		if err != nil {
+			sugar.Errorw("failed to open audit file, skipping audit for file", "err", err)
+		} else {
+			defer file.Close()
+			fileObserver := audit.NewFileObserver(file)
+			obsSubject.AddObserver(fileObserver)
+		}
 	}
 
-	if cfg.AuditUrl != "" {
-		httpObserver := audit.NewHTTPObserver(cfg.AuditUrl)
+	if cfg.AuditURL != "" {
+		httpObserver := audit.NewHTTPObserver(cfg.AuditURL)
 		obsSubject.AddObserver(httpObserver)
 	}
 
@@ -129,6 +139,8 @@ func main() {
 		sugar.Errorw("server forced to shutdown", "err", err)
 		os.Exit(1)
 	}
+
+	defer obsSubject.Close()
 
 	sugar.Infow("server stopped gracefully")
 }
