@@ -51,7 +51,9 @@ func main() {
 		defer database.Close()
 	}
 
-	obsSubject := audit.NewSubject(sugar)
+	auditCtx, cancelAudit := context.WithCancel(context.Background())
+	defer cancelAudit()
+	obsSubject := audit.NewSubject(auditCtx, sugar)
 	if cfg.AuditFile != "" {
 		file, err := os.OpenFile(
 			cfg.AuditFile,
@@ -140,7 +142,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	defer obsSubject.Close()
+	cancelAudit()
+	obsSubject.Close()
 
 	sugar.Infow("server stopped gracefully")
 }

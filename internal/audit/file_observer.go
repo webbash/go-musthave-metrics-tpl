@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -22,7 +23,7 @@ func NewFileObserver(file *os.File) *FileObserver {
 }
 
 // Observe appends an audit event to the configured file.
-func (o *FileObserver) Observe(e Event) error {
+func (o *FileObserver) Observe(_ context.Context, e Event) error {
 	data, err := json.Marshal(e)
 	if err != nil {
 		return fmt.Errorf("marshal event: %w", err)

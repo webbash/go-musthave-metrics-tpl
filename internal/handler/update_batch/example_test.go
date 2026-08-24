@@ -1,6 +1,7 @@
 package update_batch
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -17,7 +18,7 @@ import (
 func ExampleHandler() {
 	logger := zap.NewNop().Sugar()
 	storage := repository.NewMemStorage()
-	handler := NewHandler(service.NewMetricsService(storage), logger, audit.NewSubject(logger))
+	handler := NewHandler(service.NewMetricsService(storage), logger, audit.NewSubject(context.Background(), logger))
 
 	router := chi.NewRouter()
 	router.Post("/updates", handler.ServeHTTP)

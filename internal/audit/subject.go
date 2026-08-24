@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"context"
 	"sync"
 
 	"go.uber.org/zap"
@@ -10,15 +11,18 @@ import (
 type Subject struct {
 	channels []chan Event
 	closed   bool
+	ctx      context.Context
 	mu       *sync.RWMutex
 	wg       *sync.WaitGroup
 	logger   *zap.SugaredLogger
 }
 
-// NewSubject creates an audit event subject that reports observer errors to logger.
-func NewSubject(logger *zap.SugaredLogger) *Subject {
+// NewSubject creates an audit event subject with the given lifecycle context
+// that reports observer errors to logger.
+func NewSubject(ctx context.Context, logger *zap.SugaredLogger) *Subject {
 	return &Subject{
 		logger:   logger,
+		ctx:      ctx,
 		channels: make([]chan Event, 0),
 		mu:       &sync.RWMutex{},
 		wg:       &sync.WaitGroup{},
@@ -39,7 +43,7 @@ func (s *Subject) addChannel(o Observer) chan Event {
 		defer s.wg.Done()
 
 		for event := range ch {
-			err := o.Observe(event)
+			err := o.Observe(s.ctx, event)
 			if err != nil {
 				s.logger.Errorw("Failed to observe event", "err", err)
 			}

@@ -39,15 +39,15 @@ func NewHTTPObserver(url string) *HTTPObserver {
 }
 
 // Observe sends an audit event to the configured HTTP endpoint, retrying
-// network errors and 5xx responses.
-func (o *HTTPObserver) Observe(e Event) error {
+// network errors, 408, 429, and 5xx responses.
+func (o *HTTPObserver) Observe(ctx context.Context, e Event) error {
 	body, err := json.Marshal(e)
 	if err != nil {
 		return fmt.Errorf("marshal audit event: %w", err)
 	}
 
-	return retry.Do(context.Background(), func() error {
-		req, err := http.NewRequest(http.MethodPost, o.url, bytes.NewReader(body))
+	return retry.Do(ctx, func() error {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, o.url, bytes.NewReader(body))
 		if err != nil {
 			return fmt.Errorf("create audit request: %w", err)
 		}
@@ -64,17 +64,18 @@ func (o *HTTPObserver) Observe(e Event) error {
 		}
 		defer resp.Body.Close()
 
-		switch {
-		case resp.StatusCode >= http.StatusInternalServerError && resp.StatusCode < 600:
+		if isRetriable(resp) {
 			return fmt.Errorf("%w: %s", errServerFailure, resp.Status)
-		case resp.StatusCode != http.StatusOK:
+		}
+
+		if resp.StatusCode != http.StatusOK {
 			return fmt.Errorf(
 				"audit server returned status %s",
 				resp.Status,
 			)
-		default:
-			return nil
 		}
+
+		return nil
 	}, func(err error) bool {
 		if errors.Is(err, errServerFailure) || errors.Is(err, errConnectionFailure) {
 			return true
@@ -82,4 +83,17 @@ func (o *HTTPObserver) Observe(e Event) error {
 
 		return false
 	}, o.retryIntervals)
+}
+
+func isRetriable(resp *http.Response) bool {
+	switch {
+	case resp.StatusCode == http.StatusTooManyRequests:
+		return true
+	case resp.StatusCode == http.StatusRequestTimeout:
+		return true
+	case resp.StatusCode >= http.StatusInternalServerError && resp.StatusCode < 600:
+		return true
+	default:
+		return false
+	}
 }

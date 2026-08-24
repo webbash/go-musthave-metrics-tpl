@@ -1,6 +1,7 @@
 package update
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -70,7 +71,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 	storage := repository.NewMemStorage()
 	metricsService := service.NewMetricsService(storage)
 	logger := &zap.SugaredLogger{}
-	subject := audit.NewSubject(logger)
+	subject := audit.NewSubject(context.Background(), logger)
 	handler := NewHandler(metricsService, subject, logger)
 
 	for _, tt := range tests {

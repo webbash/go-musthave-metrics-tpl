@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,7 +21,7 @@ import (
 
 type observerFunc func(Event) error
 
-func (f observerFunc) Observe(event Event) error {
+func (f observerFunc) Observe(_ context.Context, event Event) error {
 	return f(event)
 }
 
@@ -41,13 +42,13 @@ func TestFileObserver(t *testing.T) {
 	event := Event{TS: 1, Metrics: []string{"temperature"}, IPAddress: "127.0.0.1"}
 	observer := NewFileObserver(file)
 
-	require.NoError(t, observer.Observe(event))
+	require.NoError(t, observer.Observe(context.Background(), event))
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
 	assert.Contains(t, string(data), `"temperature"`)
 
 	require.NoError(t, file.Close())
-	assert.Error(t, observer.Observe(event))
+	assert.Error(t, observer.Observe(context.Background(), event))
 }
 
 func TestFileObserverConcurrent(t *testing.T) {
@@ -67,7 +68,7 @@ func TestFileObserverConcurrent(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			errs <- observer.Observe(Event{TS: 1, Metrics: []string{"temperature"}})
+			errs <- observer.Observe(context.Background(), Event{TS: 1, Metrics: []string{"temperature"}})
 		}()
 	}
 	wg.Wait()
@@ -99,7 +100,7 @@ func TestHTTPObserverSuccess(t *testing.T) {
 		return response(http.StatusOK), nil
 	}))
 
-	require.NoError(t, observer.Observe(event))
+	require.NoError(t, observer.Observe(context.Background(), event))
 }
 
 func TestHTTPObserverRetriesServerFailure(t *testing.T) {
@@ -111,7 +112,7 @@ func TestHTTPObserverRetriesServerFailure(t *testing.T) {
 		return response(http.StatusBadGateway), nil
 	})}
 
-	err := observer.Observe(Event{})
+	err := observer.Observe(context.Background(), Event{})
 	require.ErrorIs(t, err, errServerFailure)
 	assert.Contains(t, err.Error(), "502 Bad Gateway")
 	assert.Equal(t, 4, calls)
@@ -126,7 +127,7 @@ func TestHTTPObserverRetriesConnectionFailure(t *testing.T) {
 		return nil, errors.New("connection refused")
 	})}
 
-	err := observer.Observe(Event{})
+	err := observer.Observe(context.Background(), Event{})
 	require.ErrorIs(t, err, errConnectionFailure)
 	assert.Contains(t, err.Error(), "connection refused")
 	assert.Equal(t, 4, calls)
@@ -141,14 +142,14 @@ func TestHTTPObserverDoesNotRetryClientFailure(t *testing.T) {
 		return response(http.StatusBadRequest), nil
 	})}
 
-	err := observer.Observe(Event{})
+	err := observer.Observe(context.Background(), Event{})
 	require.Error(t, err)
 	assert.NotErrorIs(t, err, errServerFailure)
 	assert.Equal(t, 1, calls)
 }
 
 func TestHTTPObserverInvalidURL(t *testing.T) {
-	assert.Error(t, NewHTTPObserver("://invalid").Observe(Event{}))
+	assert.Error(t, NewHTTPObserver("://invalid").Observe(context.Background(), Event{}))
 }
 
 func newTestHTTPObserver(transport http.RoundTripper) *HTTPObserver {
@@ -167,7 +168,7 @@ func response(statusCode int) *http.Response {
 }
 
 func TestSubjectNotify(t *testing.T) {
-	subject := NewSubject(zap.NewNop().Sugar())
+	subject := NewSubject(context.Background(), zap.NewNop().Sugar())
 	t.Cleanup(subject.Close)
 
 	firstObserverEvents := make(chan Event, 1)
@@ -190,7 +191,7 @@ func TestSubjectNotify(t *testing.T) {
 }
 
 func TestSubjectCloseDrainsBufferedEvents(t *testing.T) {
-	subject := NewSubject(zap.NewNop().Sugar())
+	subject := NewSubject(context.Background(), zap.NewNop().Sugar())
 	processed := make(chan Event, 3)
 	subject.AddObserver(observerFunc(func(event Event) error {
 		processed <- event
@@ -210,7 +211,7 @@ func TestSubjectCloseDrainsBufferedEvents(t *testing.T) {
 }
 
 func TestSubjectNotifyDropsEventWhenChannelIsFull(t *testing.T) {
-	subject := NewSubject(zap.NewNop().Sugar())
+	subject := NewSubject(context.Background(), zap.NewNop().Sugar())
 	started := make(chan struct{})
 	release := make(chan struct{})
 	processed := make(chan Event, 6)

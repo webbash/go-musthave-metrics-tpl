@@ -1,6 +1,7 @@
 package update_metric
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,7 +19,7 @@ import (
 func ExampleHandler() {
 	logger := zap.NewNop().Sugar()
 	storage := repository.NewMemStorage()
-	handler := NewHandler(service.NewMetricsService(storage), audit.NewSubject(logger), logger)
+	handler := NewHandler(service.NewMetricsService(storage), audit.NewSubject(context.Background(), logger), logger)
 
 	router := chi.NewRouter()
 	router.Post("/update", handler.ServeHTTP)
