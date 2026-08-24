@@ -1,3 +1,4 @@
+// Package get_value_metric implements the JSON endpoint for reading one metric.
 package get_value_metric
 
 import (
@@ -8,16 +9,19 @@ import (
 	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
 )
 
+// Handler serves the JSON metric value endpoint.
 type Handler struct {
 	service metricsService
 }
 
+// NewHandler creates a handler for the JSON metric value endpoint.
 func NewHandler(service metricsService) *Handler {
 	return &Handler{
 		service: service,
 	}
 }
 
+// ServeHTTP handles POST /value requests containing a metric descriptor in JSON.
 func (h Handler) ServeHTTP(res http.ResponseWriter, r *http.Request) {
 	res.Header().Set("Content-Type", "application/json")
 

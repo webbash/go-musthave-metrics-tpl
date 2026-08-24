@@ -5,8 +5,9 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/webbash/go-musthave-metrics-tpl.git/internal/crypto"
 	"go.uber.org/zap"
+
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/crypto"
 )
 
 // It needs to save body content before we will send it to client.

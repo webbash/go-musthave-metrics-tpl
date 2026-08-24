@@ -10,24 +10,33 @@ import (
 )
 
 var (
+	// ErrInvalidMetricValue indicates that a metric value has an invalid format
+	// or that the value required by the metric type was not provided.
 	ErrInvalidMetricValue = errors.New("invalid metric value")
-	ErrMetricNotFound     = errors.New("metric not found")
-	ErrUnknownMetricType  = errors.New("unknown metric type")
-	ErrInvalidMetric      = errors.New("metric is invalid")
+	// ErrMetricNotFound indicates that the requested metric does not exist.
+	ErrMetricNotFound = errors.New("metric not found")
+	// ErrUnknownMetricType indicates that a metric type is not supported.
+	ErrUnknownMetricType = errors.New("unknown metric type")
+	// ErrInvalidMetric indicates that a metric is missing required identifying fields.
+	ErrInvalidMetric = errors.New("metric is invalid")
 )
 
+// MetricsService contains the business logic for reading and updating metrics.
 type MetricsService struct {
 	repository    MetricsRepository
 	fileStorage   MetricsFileStorage
 	storeInterval int
 }
 
+// NewMetricsService creates a metrics service backed by repository.
 func NewMetricsService(repository MetricsRepository) *MetricsService {
 	return &MetricsService{
 		repository: repository,
 	}
 }
 
+// Update parses and updates a metric received in the legacy URL format.
+// Counters are incremented by metricValue; gauges are replaced by it.
 func (s *MetricsService) Update(ctx context.Context, metricType, metricName, metricValue string) error {
 	switch metricType {
 	case models.Counter:
@@ -57,6 +66,8 @@ func (s *MetricsService) Update(ctx context.Context, metricType, metricName, met
 	}
 }
 
+// UpdateMetric updates a metric received in the JSON API format and returns
+// the metric with its stored value.
 func (s *MetricsService) UpdateMetric(ctx context.Context, metric models.Metrics) (models.Metrics, error) {
 	switch metric.MType {
 	case models.Counter:
@@ -90,6 +101,8 @@ func (s *MetricsService) UpdateMetric(ctx context.Context, metric models.Metrics
 
 }
 
+// GetMetric returns a metric received in the JSON API format with its current
+// value loaded from the repository.
 func (s *MetricsService) GetMetric(ctx context.Context, metric models.Metrics) (models.Metrics, error) {
 	if metric.ID == "" || metric.MType == "" {
 		return models.Metrics{}, ErrInvalidMetric
@@ -117,6 +130,7 @@ func (s *MetricsService) GetMetric(ctx context.Context, metric models.Metrics) (
 	}
 }
 
+// Get returns a metric value formatted as text for the legacy URL endpoint.
 func (s *MetricsService) Get(ctx context.Context, metricType, metricName string) (string, error) {
 	switch metricType {
 	case models.Counter:
@@ -138,6 +152,7 @@ func (s *MetricsService) Get(ctx context.Context, metricType, metricName string)
 	}
 }
 
+// UpdateMany validates and delegates a batch of metrics to the repository.
 func (s *MetricsService) UpdateMany(ctx context.Context, metrics []models.Metrics) error {
 	for _, metric := range metrics {
 		if metric.MType != models.Counter && metric.MType != models.Gauge {

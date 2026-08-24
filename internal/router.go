@@ -4,6 +4,9 @@ import (
 	"database/sql"
 
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
+
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/audit"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/config"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/crypto"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/get_value"
@@ -15,7 +18,6 @@ import (
 	update_metric_handler "github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/update_metric"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/middleware"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
-	"go.uber.org/zap"
 )
 
 type Router struct {
@@ -25,9 +27,10 @@ type Router struct {
 	metricsService *service.MetricsService
 	repository     service.MetricsRepository
 	db             *sql.DB
+	subject        *audit.Subject
 }
 
-func NewRouter(cfg config.Config, logger *zap.SugaredLogger, metricsService *service.MetricsService, repository service.MetricsRepository, db *sql.DB) *Router {
+func NewRouter(cfg config.Config, logger *zap.SugaredLogger, metricsService *service.MetricsService, repository service.MetricsRepository, db *sql.DB, subject *audit.Subject) *Router {
 	return &Router{
 		cfg:            cfg,
 		logger:         logger,
@@ -35,14 +38,15 @@ func NewRouter(cfg config.Config, logger *zap.SugaredLogger, metricsService *ser
 		metricsService: metricsService,
 		repository:     repository,
 		db:             db,
+		subject:        subject,
 	}
 }
 
 func (r *Router) Init() *chi.Mux {
 	pingH := ping_db.NewHandler(r.db, r.logger)
-	updateH := update_handler.NewHandler(r.metricsService)
-	updateMetricH := update_metric_handler.NewHandler(r.metricsService)
-	updateBatchH := update_batch.NewHandler(r.metricsService, r.logger)
+	updateH := update_handler.NewHandler(r.metricsService, r.subject, r.logger)
+	updateMetricH := update_metric_handler.NewHandler(r.metricsService, r.subject, r.logger)
+	updateBatchH := update_batch.NewHandler(r.metricsService, r.logger, r.subject)
 	getValueMetricH := get_value_metric.NewHandler(r.metricsService)
 	getValueH := get_value.NewHandler(r.metricsService)
 	getValueListH := get_value_list.NewHandler(r.repository)

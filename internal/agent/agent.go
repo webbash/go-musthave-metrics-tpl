@@ -1,3 +1,5 @@
+// Package agent collects runtime and system metrics and sends them to the
+// metrics server in batches.
 package agent
 
 import (
@@ -7,14 +9,19 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/crypto"
 	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
-	"go.uber.org/zap"
 )
 
+// Agent coordinates metric collection and delivery.
 type Agent struct {
-	PollInterval      time.Duration
-	ReportInterval    time.Duration
+	// PollInterval is the interval at which collectors refresh their snapshots.
+	PollInterval time.Duration
+	// ReportInterval is the interval at which collected metrics are grouped into batches.
+	ReportInterval time.Duration
+	// RateLimit is the maximum number of concurrent workers sending batches.
 	RateLimit         int
 	sender            *Sender
 	runtimeCollector  *RuntimeCollector
@@ -22,10 +29,14 @@ type Agent struct {
 	logger            *zap.SugaredLogger
 }
 
+// Batch contains the metrics sent by one worker-pool job.
 type Batch struct {
+	// Metrics is the collection of metrics to send to the server.
 	Metrics []models.Metrics
 }
 
+// NewAgent creates an agent configured to send metrics to basicURL.
+// If basicURL has no scheme, http:// is used.
 func NewAgent(basicURL string, pollInterval, reportInterval time.Duration, httpClient *http.Client, signer *crypto.SHA256Signer, rateLimit int, logger *zap.SugaredLogger) *Agent {
 	addr := basicURL
 	if !strings.HasPrefix(addr, "http://") && !strings.HasPrefix(addr, "https://") {
@@ -43,6 +54,7 @@ func NewAgent(basicURL string, pollInterval, reportInterval time.Duration, httpC
 	}
 }
 
+// Loop starts metric collection and sending until ctx is cancelled.
 func (a *Agent) Loop(ctx context.Context) {
 	wg := sync.WaitGroup{}
 

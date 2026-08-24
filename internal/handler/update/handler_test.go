@@ -1,6 +1,7 @@
 package update
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -8,6 +9,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
+
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/audit"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/repository"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
 )
@@ -66,7 +70,9 @@ func TestHandler_ServeHTTP(t *testing.T) {
 
 	storage := repository.NewMemStorage()
 	metricsService := service.NewMetricsService(storage)
-	handler := NewHandler(metricsService)
+	logger := &zap.SugaredLogger{}
+	subject := audit.NewSubject(context.Background(), logger)
+	handler := NewHandler(metricsService, subject, logger)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

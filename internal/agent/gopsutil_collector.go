@@ -6,20 +6,24 @@ import (
 
 	"github.com/shirou/gopsutil/v4/cpu"
 	"github.com/shirou/gopsutil/v4/mem"
+
 	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
 )
 
+// GopsutilCollector stores the latest host memory and CPU metrics.
 type GopsutilCollector struct {
 	gaugeMetrics map[string]float64
 	mu           sync.RWMutex
 }
 
+// NewGopsutilCollector creates a collector for memory and CPU metrics.
 func NewGopsutilCollector() *GopsutilCollector {
 	return &GopsutilCollector{
 		gaugeMetrics: make(map[string]float64),
 	}
 }
 
+// Collect reads the current memory and per-CPU utilization values.
 func (g *GopsutilCollector) Collect() error {
 	v, err := mem.VirtualMemory()
 	if err != nil {
@@ -44,6 +48,7 @@ func (g *GopsutilCollector) Collect() error {
 	return nil
 }
 
+// Snapshot returns the latest system metrics as model values.
 func (g *GopsutilCollector) Snapshot() []models.Metrics {
 	var metricsToSend []models.Metrics
 

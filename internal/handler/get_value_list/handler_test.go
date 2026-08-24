@@ -2,15 +2,18 @@ package get_value_list
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/repository"
 )
 
@@ -39,4 +42,51 @@ func TestHandler_ServeHTTP(t *testing.T) {
 	bodyStr := string(body)
 	assert.True(t, strings.Contains(bodyStr, "test_gauge: 10.6"))
 	assert.True(t, strings.Contains(bodyStr, "test_counter: 10"))
+}
+
+// Benchmark test
+func BenchmarkHandler_buildHTML(b *testing.B) {
+	gauges, counters := benchmarkMetrics()
+
+	b.Run("concat", func(b *testing.B) {
+		for b.Loop() {
+			buildHTMLConcat(gauges, counters)
+		}
+	})
+	b.Run("builder", func(b *testing.B) {
+		for b.Loop() {
+			buildHTMLBuilder(gauges, counters)
+		}
+	})
+}
+
+func benchmarkMetrics() (map[string]float64, map[string]int64) {
+	gauges := make(map[string]float64, 1000)
+	counters := make(map[string]int64, 1000)
+
+	for i := 0; i < 1000; i++ {
+		name := "metric_" + strconv.Itoa(i)
+		gauges[name] = float64(i)
+		counters[name] = int64(i)
+	}
+
+	return gauges, counters
+}
+
+func buildHTMLConcat(
+	gauges map[string]float64,
+	counters map[string]int64,
+) string {
+	html := "<html><body><h1>Metrics List</h1><ul>"
+
+	for name, value := range gauges {
+		html += fmt.Sprintf("<li>%s: %g</li>", name, value)
+	}
+
+	for name, value := range counters {
+		html += fmt.Sprintf("<li>%s: %d</li>", name, value)
+	}
+
+	html += "</ul></body></html>"
+	return html
 }

@@ -1,3 +1,4 @@
+// Package get_value implements the legacy endpoint for reading one metric.
 package get_value
 
 import (
@@ -5,19 +6,23 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
 )
 
+// Handler serves the legacy metric value endpoint.
 type Handler struct {
 	service metricsService
 }
 
+// NewHandler creates a handler for the legacy metric value endpoint.
 func NewHandler(service metricsService) *Handler {
 	return &Handler{
 		service: service,
 	}
 }
 
+// ServeHTTP handles GET /value/{metricType}/{metricName} requests.
 func (h Handler) ServeHTTP(res http.ResponseWriter, r *http.Request) {
 	mType := chi.URLParam(r, "metricType")
 	mName := chi.URLParam(r, "metricName")

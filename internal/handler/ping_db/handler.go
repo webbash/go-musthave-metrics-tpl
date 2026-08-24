@@ -1,3 +1,4 @@
+// Package ping_db implements the database health-check endpoint.
 package ping_db
 
 import (
@@ -8,11 +9,13 @@ import (
 	"go.uber.org/zap"
 )
 
+// Handler serves the database health-check endpoint.
 type Handler struct {
 	db     *sql.DB
 	logger *zap.SugaredLogger
 }
 
+// NewHandler creates a database health-check handler.
 func NewHandler(db *sql.DB, logger *zap.SugaredLogger) *Handler {
 	return &Handler{
 		db:     db,
@@ -20,6 +23,7 @@ func NewHandler(db *sql.DB, logger *zap.SugaredLogger) *Handler {
 	}
 }
 
+// ServeHTTP handles GET /ping requests by checking the database connection.
 func (h Handler) ServeHTTP(res http.ResponseWriter, r *http.Request) {
 	err := h.db.PingContext(r.Context())
 	if err != nil {

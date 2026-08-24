@@ -11,14 +11,18 @@ import (
 	"time"
 
 	"github.com/pressly/goose/v3"
+	"go.uber.org/zap"
+
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal"
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/audit"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/config"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/config/db"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/logger"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/repository"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/storage"
-	"go.uber.org/zap"
+
+	_ "net/http/pprof"
 )
 
 func main() {
@@ -47,11 +51,34 @@ func main() {
 		defer database.Close()
 	}
 
+	auditCtx, cancelAudit := context.WithCancel(context.Background())
+	defer cancelAudit()
+	obsSubject := audit.NewSubject(auditCtx, sugar)
+	if cfg.AuditFile != "" {
+		file, err := os.OpenFile(
+			cfg.AuditFile,
+			os.O_CREATE|os.O_WRONLY|os.O_APPEND,
+			0644,
+		)
+		if err != nil {
+			sugar.Errorw("failed to open audit file, skipping audit for file", "err", err)
+		} else {
+			defer file.Close()
+			fileObserver := audit.NewFileObserver(file)
+			obsSubject.AddObserver(fileObserver)
+		}
+	}
+
+	if cfg.AuditURL != "" {
+		httpObserver := audit.NewHTTPObserver(cfg.AuditURL)
+		obsSubject.AddObserver(httpObserver)
+	}
+
 	fileStorage := storage.NewFileStorage(cfg.FileStoragePath)
 	repo := buildRepository(cfg, sugar, fileStorage, database)
 	metricsService := service.NewMetricsService(repo)
 
-	r := internal.NewRouter(cfg, sugar, metricsService, repo, database).Init()
+	r := internal.NewRouter(cfg, sugar, metricsService, repo, database, obsSubject).Init()
 
 	srv := &http.Server{
 		Addr:         cfg.Address,
@@ -67,6 +94,14 @@ func main() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			sugar.Errorw("server closed", "err", err)
 			os.Exit(1)
+		}
+	}()
+
+	go func() {
+		sugar.Infow("starting pprof server", "addr", "localhost:6060")
+
+		if err := http.ListenAndServe("localhost:6060", nil); err != nil {
+			sugar.Errorw("pprof server stopped", "err", err)
 		}
 	}()
 
@@ -106,6 +141,9 @@ func main() {
 		sugar.Errorw("server forced to shutdown", "err", err)
 		os.Exit(1)
 	}
+
+	cancelAudit()
+	obsSubject.Close()
 
 	sugar.Infow("server stopped gracefully")
 }

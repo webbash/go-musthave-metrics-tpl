@@ -1,28 +1,38 @@
+// Package update_batch implements the JSON endpoint for batch metric updates.
 package update_batch
 
 import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
+	"time"
 
+	"go.uber.org/zap"
+
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/audit"
 	models "github.com/webbash/go-musthave-metrics-tpl.git/internal/model"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
-	"go.uber.org/zap"
 )
 
+// Handler serves the batch metric update endpoint.
 type Handler struct {
 	service metricsService
 	logger  *zap.SugaredLogger
+	subject *audit.Subject
 }
 
-func NewHandler(service metricsService, logger *zap.SugaredLogger) *Handler {
+// NewHandler creates a handler for the batch metric update endpoint.
+func NewHandler(service metricsService, logger *zap.SugaredLogger, subject *audit.Subject) *Handler {
 	return &Handler{
 		service: service,
 		logger:  logger,
+		subject: subject,
 	}
 }
 
+// ServeHTTP handles POST /updates requests containing a JSON metric slice.
 func (h Handler) ServeHTTP(res http.ResponseWriter, r *http.Request) {
 	res.Header().Set("Content-Type", "application/json")
 
@@ -54,6 +64,23 @@ func (h Handler) ServeHTTP(res http.ResponseWriter, r *http.Request) {
 		http.Error(res, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	ipAddress, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		ipAddress = r.RemoteAddr
+	}
+
+	metricNames := make([]string, len(metrics))
+	for i, metric := range metrics {
+		metricNames[i] = metric.ID
+	}
+
+	event := audit.Event{
+		TS:        time.Now().Unix(),
+		Metrics:   metricNames,
+		IPAddress: ipAddress,
+	}
+	h.subject.Notify(event)
 
 	res.WriteHeader(http.StatusOK)
 }
