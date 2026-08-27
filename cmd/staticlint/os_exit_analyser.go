@@ -8,7 +8,8 @@ import (
 	"golang.org/x/tools/go/analysis"
 )
 
-// ErrOsExitAnalyzer checks for calling os.Exit in main functions
+// ErrOsExitAnalyzer reports direct calls to os.Exit in the main function of a
+// main package.
 var ErrOsExitAnalyzer = &analysis.Analyzer{
 	Name: "osExit",
 	Doc:  "check for calling os.Exit in main functions",
