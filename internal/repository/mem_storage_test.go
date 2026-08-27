@@ -31,8 +31,8 @@ func TestMemStorage(t *testing.T) {
 
 	assert.Equal(t, value, func() float64 { v, _ := mem.GetGauge(ctx, "temperature"); return v }())
 	assert.Equal(t, delta, func() int64 { v, _ := mem.GetCounter(ctx, "requests"); return v }())
-	assert.Error(t, func() error { _, err := mem.GetGauge(ctx, "missing"); return err }())
-	assert.Error(t, func() error { _, err := mem.GetCounter(ctx, "missing"); return err }())
+	assert.Error(t, func() error { _, getErr := mem.GetGauge(ctx, "missing"); return getErr }())
+	assert.Error(t, func() error { _, getErr := mem.GetCounter(ctx, "missing"); return getErr }())
 
 	require.NoError(t, mem.UpdateGauge(ctx, "load", 0.75))
 	require.NoError(t, mem.IncrementCounter(ctx, "requests", 2))
