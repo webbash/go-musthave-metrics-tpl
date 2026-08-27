@@ -19,9 +19,9 @@
 //   - shift: reports invalid or suspicious shift operations, including shifts
 //     that overflow the width of their type.
 //   - structtag: checks the syntax and consistency of struct field tags.
-//   - errcheck: reports returned errors that are silently ignored instead of
-//     being handled or explicitly assigned to the blank identifier.
 //   - bodyclose: checks that HTTP response bodies are closed after requests.
+//   - nilerr: reports returning nil after checking that an error is non-nil,
+//     or returning an error after checking that it is nil.
 //   - staticcheck.Analyzers: includes every analyzer in Staticcheck's SA
 //     category. These analyzers detect correctness problems and common
 //     misuses of the standard library and language features.

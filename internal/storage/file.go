@@ -1,3 +1,4 @@
+// Package storage provides file-backed metric storage.
 package storage
 
 import (

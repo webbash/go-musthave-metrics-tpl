@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/kisielk/errcheck/errcheck"
+	"github.com/gostaticanalysis/nilerr"
 	"github.com/timakin/bodyclose/passes/bodyclose"
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/multichecker"
@@ -36,8 +36,8 @@ func main() {
 		unusedresult.Analyzer,
 
 		// Custom analyzers.
-		errcheck.Analyzer,
 		bodyclose.Analyzer,
+		nilerr.Analyzer,
 	}
 
 	// All analyzers from staticcheck.Analyzers.
