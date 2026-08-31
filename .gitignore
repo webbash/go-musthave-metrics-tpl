@@ -22,6 +22,9 @@ cmd/server/server
 # Dependency directories (remove the comment below to include it)
 vendor/
 
+# Generated Reset methods
+reset.gen.go
+
 # IDEs directories
 .idea
 .vscode
