@@ -65,3 +65,7 @@ lint:
 .PHONE: pprof-web
 pprof-web:
 	go tool pprof -http=":9090" -seconds=30 http://localhost:8080/debug/pprof/profile
+
+.PHONE: reset-generator
+reset-generator:
+	go run ./cmd/reset ./cmd/... ./internal/... .
