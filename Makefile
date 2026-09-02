@@ -62,10 +62,24 @@ test:
 lint:
 	golangci-lint run
 
-.PHONE: pprof-web
+.PHONY: pprof-web
 pprof-web:
 	go tool pprof -http=":9090" -seconds=30 http://localhost:8080/debug/pprof/profile
 
-.PHONE: reset-generator
+.PHONY: reset-generator
 reset-generator:
 	go run ./cmd/reset ./cmd/... ./internal/... .
+
+.PHONY: agent-version
+agent-version:
+	go run -ldflags "-X main.buildVersion=$(git describe --tags --always) \
+	   -X main.buildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+	   -X main.buildCommit=$(git rev-parse HEAD)" \
+	   ./cmd/agent
+
+.PHONY: server-version
+server-version:
+	go run -ldflags "-X main.buildVersion=$(git describe --tags --always) \
+	   -X main.buildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+	   -X main.buildCommit=$(git rev-parse HEAD)" \
+	   ./cmd/server
