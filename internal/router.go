@@ -1,3 +1,4 @@
+// Package internal assembles the application's HTTP routes.
 package internal
 
 import (

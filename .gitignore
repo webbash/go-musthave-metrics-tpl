@@ -25,3 +25,6 @@ vendor/
 # IDEs directories
 .idea
 .vscode
+
+# Engram AI agent memory
+.engram/
