@@ -1,3 +1,4 @@
+// Package internal assembles the application's HTTP routes.
 package internal
 
 import (
@@ -20,6 +21,7 @@ import (
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
 )
 
+// generate:reset
 type Router struct {
 	cfg            config.Config
 	logger         *zap.SugaredLogger
