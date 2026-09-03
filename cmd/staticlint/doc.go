@@ -19,6 +19,15 @@
 //   - shift: reports invalid or suspicious shift operations, including shifts
 //     that overflow the width of their type.
 //   - structtag: checks the syntax and consistency of struct field tags.
+//   - errorsas: checks errors.As calls for valid target arguments.
+//   - httpresponse: checks that HTTP response bodies are handled correctly.
+//   - lostcancel: checks that cancel functions returned by context.WithCancel
+//     are called.
+//   - nilfunc: detects impossible comparisons between functions and nil.
+//   - unmarshal: checks calls to unmarshalling functions for valid arguments.
+//   - unreachable: reports unreachable code.
+//   - unusedresult: checks calls to functions whose results must not be
+//     ignored.
 //   - bodyclose: checks that HTTP response bodies are closed after requests.
 //   - nilerr: reports returning nil after checking that an error is non-nil,
 //     or returning an error after checking that it is nil.

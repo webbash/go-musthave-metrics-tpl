@@ -43,20 +43,17 @@ func main() {
 		var err error
 		database, err = db.NewPGConnector(cfg.DatabaseDSN).Connect()
 		if err != nil {
-			sugar.Errorw("failed to connect to database", "err", err)
-			return
+			sugar.Fatalw("failed to connect to database", "err", err)
 		}
 
 		err = goose.SetDialect("postgres")
 		if err != nil {
-			sugar.Errorw("failed to set sql dialect", "err", err)
-			return
+			sugar.Fatalw("failed to set sql dialect", "err", err)
 		}
 
 		err = goose.Up(database, "migrations")
 		if err != nil {
-			sugar.Errorw("failed to run migrations", "err", err)
-			return
+			sugar.Fatalw("failed to run migrations", "err", err)
 		}
 
 		defer database.Close()
