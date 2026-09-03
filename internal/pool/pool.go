@@ -1,3 +1,4 @@
+// Package pool provides a reusable pool for resettable objects.
 package pool
 
 import "sync"
