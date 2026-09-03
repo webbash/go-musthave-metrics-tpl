@@ -66,7 +66,7 @@ func (a *Sender) sendMetrics(ctx context.Context, metric []models.Metrics) error
 
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
-	if _, err := gz.Write(body); err != nil {
+	if _, err = gz.Write(body); err != nil {
 		return fmt.Errorf("gzip write: %w", err)
 	}
 	err = gz.Close()

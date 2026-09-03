@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -25,7 +26,15 @@ import (
 	_ "net/http/pprof"
 )
 
+var (
+	buildVersion = "N/A"
+	buildDate    = "N/A"
+	buildCommit  = "N/A"
+)
+
 func main() {
+	fmt.Printf("Build version: %s\nBuild date: %s\nBuild commit: %s\n", buildVersion, buildDate, buildCommit)
+
 	cfg := config.NewConfig()
 	sugar := logger.NewLogger()
 
@@ -34,18 +43,17 @@ func main() {
 		var err error
 		database, err = db.NewPGConnector(cfg.DatabaseDSN).Connect()
 		if err != nil {
-			sugar.Errorw("failed to connect to database", "err", err)
-			os.Exit(1)
+			sugar.Fatalw("failed to connect to database", "err", err)
 		}
 
-		if err := goose.SetDialect("postgres"); err != nil {
-			sugar.Errorw("failed to setting sql dialect", "err", err)
-			os.Exit(1)
+		err = goose.SetDialect("postgres")
+		if err != nil {
+			sugar.Fatalw("failed to set sql dialect", "err", err)
 		}
 
-		if err := goose.Up(database, "migrations"); err != nil {
-			sugar.Errorw("failed to run migrations", "err", err)
-			os.Exit(1)
+		err = goose.Up(database, "migrations")
+		if err != nil {
+			sugar.Fatalw("failed to run migrations", "err", err)
 		}
 
 		defer database.Close()
@@ -93,7 +101,6 @@ func main() {
 		sugar.Infow("starting server", "addr", cfg.Address)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			sugar.Errorw("server closed", "err", err)
-			os.Exit(1)
 		}
 	}()
 
@@ -139,7 +146,6 @@ func main() {
 
 	if err := srv.Shutdown(ctx); err != nil {
 		sugar.Errorw("server forced to shutdown", "err", err)
-		os.Exit(1)
 	}
 
 	cancelAudit()

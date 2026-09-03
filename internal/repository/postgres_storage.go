@@ -27,6 +27,9 @@ func (r *PostgresRepository) GetAllGauges(ctx context.Context) (map[string]float
 	err := r.withRetry(ctx, func() error {
 		var err error
 		rows, err = r.db.QueryContext(ctx, "SELECT id, value FROM metrics WHERE type = $1", models.Gauge)
+		if err != nil {
+			return fmt.Errorf("r.GetAllGauges: %w", err)
+		}
 		defer rows.Close()
 
 		return err
@@ -62,6 +65,9 @@ func (r *PostgresRepository) GetAllCounters(ctx context.Context) (map[string]int
 	err := r.withRetry(ctx, func() error {
 		var err error
 		rows, err = r.db.QueryContext(ctx, "SELECT id, delta FROM metrics WHERE type = $1", models.Counter)
+		if err != nil {
+			return err
+		}
 		defer rows.Close()
 
 		return err
@@ -172,6 +178,9 @@ func (r *PostgresRepository) GetAllMetrics(ctx context.Context) ([]models.Metric
 	err := r.withRetry(ctx, func() error {
 		var err error
 		rows, err = r.db.QueryContext(ctx, "SELECT id, value FROM metrics")
+		if err != nil {
+			return err
+		}
 		defer rows.Close()
 
 		return err
