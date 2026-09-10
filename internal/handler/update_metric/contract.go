@@ -1,4 +1,4 @@
-package update_metric
+package updatemetric
 
 import (
 	"context"

@@ -1,5 +1,5 @@
-// Package ping_db implements the database health-check endpoint.
-package ping_db
+// Package pingdb implements the database health-check endpoint.
+package pingdb
 
 import (
 	"database/sql"

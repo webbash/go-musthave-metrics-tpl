@@ -1,4 +1,4 @@
-package get_value_list
+package getvaluelist
 
 import (
 	"fmt"

@@ -1,5 +1,5 @@
-// Package get_value implements the legacy endpoint for reading one metric.
-package get_value
+// Package getvalue implements the legacy endpoint for reading one metric.
+package getvalue
 
 import (
 	"errors"

@@ -1,5 +1,5 @@
-// Package get_value_metric implements the JSON endpoint for reading one metric.
-package get_value_metric
+// Package getvaluemetric implements the JSON endpoint for reading one metric.
+package getvaluemetric
 
 import (
 	"bytes"

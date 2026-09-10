@@ -1,5 +1,5 @@
-// Package update_batch implements the JSON endpoint for batch metric updates.
-package update_batch
+// Package updatebatch implements the JSON endpoint for batch metric updates.
+package updatebatch
 
 import (
 	"bytes"
