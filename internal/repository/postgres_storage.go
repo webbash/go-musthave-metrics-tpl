@@ -201,6 +201,10 @@ func (r *PostgresRepository) GetAllMetrics(ctx context.Context) ([]models.Metric
 		metrics = append(metrics, metric)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("r.GetAllMetrics: failed to iterate over rows: %w", err)
+	}
+
 	return metrics, nil
 }
 

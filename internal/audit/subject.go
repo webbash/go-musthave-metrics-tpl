@@ -71,7 +71,6 @@ func (s *Subject) Notify(e Event) {
 			s.logger.Warnw("Audit event channel is full, dropping event", "event", e)
 		}
 	}
-	return
 }
 
 // Close stops accepting new events, closes all observer queues, and waits for

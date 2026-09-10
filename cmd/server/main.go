@@ -117,19 +117,16 @@ func main() {
 			ticker := time.NewTicker(time.Duration(cfg.StoreInterval) * time.Second)
 			defer ticker.Stop()
 
-			for {
-				select {
-				case <-ticker.C:
-					metrics, err := repo.GetAllMetrics(context.Background())
-					if err != nil {
-						sugar.Errorw("failed to get all metrics", "err", err)
-						continue
-					}
-					err = fileStorage.Save(metrics)
-					if err != nil {
-						sugar.Errorw("failed to save metrics to file", "err", err)
-						continue
-					}
+			for range ticker.C {
+				metrics, err := repo.GetAllMetrics(context.Background())
+				if err != nil {
+					sugar.Errorw("failed to get all metrics", "err", err)
+					continue
+				}
+				err = fileStorage.Save(metrics)
+				if err != nil {
+					sugar.Errorw("failed to save metrics to file", "err", err)
+					continue
 				}
 			}
 		}()

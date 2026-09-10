@@ -3,7 +3,6 @@ package ping_db
 
 import (
 	"database/sql"
-	"fmt"
 	"net/http"
 
 	"go.uber.org/zap"
@@ -33,5 +32,5 @@ func (h Handler) ServeHTTP(res http.ResponseWriter, r *http.Request) {
 	}
 
 	res.WriteHeader(http.StatusOK)
-	res.Write([]byte(fmt.Sprintf("PONG")))
+	res.Write([]byte("PONG"))
 }

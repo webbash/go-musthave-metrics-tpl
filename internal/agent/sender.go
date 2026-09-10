@@ -74,12 +74,12 @@ func (a *Sender) sendMetrics(ctx context.Context, metric []models.Metrics) error
 		return fmt.Errorf("gzip closing: %w", err)
 	}
 
-	updateUrl, err := url.JoinPath(a.baseURL, "/updates")
+	updateURL, err := url.JoinPath(a.baseURL, "/updates")
 	if err != nil {
 		return fmt.Errorf("create url: %w", err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, updateUrl, &buf)
+	req, err := http.NewRequest(http.MethodPost, updateURL, &buf)
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
