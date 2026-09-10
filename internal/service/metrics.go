@@ -22,6 +22,7 @@ var (
 )
 
 // MetricsService contains the business logic for reading and updating metrics.
+// generate:reset
 type MetricsService struct {
 	repository    MetricsRepository
 	fileStorage   MetricsFileStorage

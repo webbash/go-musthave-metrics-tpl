@@ -23,69 +23,74 @@ func NewPostgresRepository(db *sql.DB) *PostgresRepository {
 }
 
 func (r *PostgresRepository) GetAllGauges(ctx context.Context) (map[string]float64, error) {
-	var rows *sql.Rows
+	var gauges map[string]float64
 	err := r.withRetry(ctx, func() error {
-		var err error
-		rows, err = r.db.QueryContext(ctx, "SELECT id, value FROM metrics WHERE type = $1", models.Gauge)
+		rows, err := r.db.QueryContext(ctx, "SELECT id, value FROM metrics WHERE type = $1", models.Gauge)
+		if err != nil {
+			return fmt.Errorf("r.GetAllGauges: %w", err)
+		}
 		defer rows.Close()
 
-		return err
+		result := make(map[string]float64)
+		for rows.Next() {
+			var (
+				id    string
+				value float64
+			)
+
+			if err := rows.Scan(&id, &value); err != nil {
+				return fmt.Errorf("r.GetAllGauges: failed to scan gauge metric: %w", err)
+			}
+
+			result[id] = value
+		}
+
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("r.GetAllGauges: failed to iterate over rows: %w", err)
+		}
+
+		gauges = result
+		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("r.GetAllGauges: %w", err)
-	}
-
-	gauges := make(map[string]float64)
-
-	for rows.Next() {
-		var (
-			id    string
-			value float64
-		)
-
-		if err := rows.Scan(&id, &value); err != nil {
-			return nil, fmt.Errorf("r.GetAllGauges: failed to scan gauge metric: %w", err)
-		}
-
-		gauges[id] = value
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("r.GetAllGauges: failed to iterate over rows: %w", err)
 	}
 
 	return gauges, nil
 }
 
 func (r *PostgresRepository) GetAllCounters(ctx context.Context) (map[string]int64, error) {
-	var rows *sql.Rows
+	var counter map[string]int64
 	err := r.withRetry(ctx, func() error {
-		var err error
-		rows, err = r.db.QueryContext(ctx, "SELECT id, delta FROM metrics WHERE type = $1", models.Counter)
+		rows, err := r.db.QueryContext(ctx, "SELECT id, delta FROM metrics WHERE type = $1", models.Counter)
+		if err != nil {
+			return err
+		}
 		defer rows.Close()
 
-		return err
+		result := make(map[string]int64)
+		for rows.Next() {
+			var (
+				id    string
+				value int64
+			)
+
+			if err := rows.Scan(&id, &value); err != nil {
+				return fmt.Errorf("r.GetAllCounters: failed to scan counter metric: %w", err)
+			}
+
+			result[id] = value
+		}
+
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("r.GetAllCounters: failed to iterate over rows: %w", err)
+		}
+
+		counter = result
+		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("r.GetAllCounters: %w", err)
-	}
-	counter := make(map[string]int64)
-
-	for rows.Next() {
-		var (
-			id    string
-			value int64
-		)
-
-		if err := rows.Scan(&id, &value); err != nil {
-			return nil, fmt.Errorf("r.GetAllCounters: failed to scan counter metric: %w", err)
-		}
-
-		counter[id] = value
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("r.GetAllCounters: failed to iterate over rows: %w", err)
 	}
 
 	return counter, nil
@@ -168,28 +173,34 @@ func (r *PostgresRepository) UpdateGauge(ctx context.Context, metricName string,
 	return nil
 }
 func (r *PostgresRepository) GetAllMetrics(ctx context.Context) ([]models.Metrics, error) {
-	var rows *sql.Rows
+	var metrics []models.Metrics
 	err := r.withRetry(ctx, func() error {
-		var err error
-		rows, err = r.db.QueryContext(ctx, "SELECT id, value FROM metrics")
+		rows, err := r.db.QueryContext(ctx, "SELECT id, value FROM metrics")
+		if err != nil {
+			return err
+		}
 		defer rows.Close()
 
-		return err
+		result := make([]models.Metrics, 0)
+		for rows.Next() {
+			var metric models.Metrics
+
+			if err := rows.Scan(&metric); err != nil {
+				return fmt.Errorf("r.GetAllMetrics: failed to scan counter metric: %w", err)
+			}
+
+			result = append(result, metric)
+		}
+
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("r.GetAllMetrics: failed to iterate over rows: %w", err)
+		}
+
+		metrics = result
+		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("r.GetAllMetrics: %w", err)
-	}
-
-	metrics := make([]models.Metrics, 0)
-
-	for rows.Next() {
-		var metric models.Metrics
-
-		if err := rows.Scan(&metric); err != nil {
-			return nil, fmt.Errorf("r.GetAllMetrics: failed to scan counter metric: %w", err)
-		}
-
-		metrics = append(metrics, metric)
 	}
 
 	return metrics, nil

@@ -1,4 +1,4 @@
-package get_value_metric
+package getvaluemetric
 
 import (
 	"context"

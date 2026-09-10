@@ -1,3 +1,4 @@
+// Package crypto provides HMAC-SHA256 signing helpers.
 package crypto
 
 import (

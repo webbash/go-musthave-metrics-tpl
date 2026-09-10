@@ -1,9 +1,8 @@
-// Package ping_db implements the database health-check endpoint.
-package ping_db
+// Package pingdb implements the database health-check endpoint.
+package pingdb
 
 import (
 	"database/sql"
-	"fmt"
 	"net/http"
 
 	"go.uber.org/zap"
@@ -33,5 +32,5 @@ func (h Handler) ServeHTTP(res http.ResponseWriter, r *http.Request) {
 	}
 
 	res.WriteHeader(http.StatusOK)
-	res.Write([]byte(fmt.Sprintf("PONG")))
+	res.Write([]byte("PONG"))
 }

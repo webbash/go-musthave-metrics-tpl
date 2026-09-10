@@ -1,3 +1,4 @@
+// Package errors classifies PostgreSQL errors for retry handling.
 package errors
 
 import (

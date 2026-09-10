@@ -1,5 +1,5 @@
-// Package update_metric implements the JSON endpoint for updating one metric.
-package update_metric
+// Package updatemetric implements the JSON endpoint for updating one metric.
+package updatemetric
 
 import (
 	"bytes"

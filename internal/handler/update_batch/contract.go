@@ -1,4 +1,4 @@
-package update_batch
+package updatebatch
 
 import (
 	"context"

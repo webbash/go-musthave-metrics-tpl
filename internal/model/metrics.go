@@ -1,3 +1,4 @@
+// Package models defines metric data structures and metric type constants.
 package models
 
 const (

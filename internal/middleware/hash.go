@@ -22,8 +22,8 @@ func (w *hashResponseWriter) Write(p []byte) (int, error) {
 	return w.body.Write(p)
 }
 
-func (h *hashResponseWriter) WriteHeader(statusCode int) {
-	h.statusCode = statusCode
+func (w *hashResponseWriter) WriteHeader(statusCode int) {
+	w.statusCode = statusCode
 }
 
 func HashCheckMiddleware(signer *crypto.SHA256Signer, logger *zap.SugaredLogger) func(http.Handler) http.Handler {
@@ -67,8 +67,6 @@ func HashCheckMiddleware(signer *crypto.SHA256Signer, logger *zap.SugaredLogger)
 			if err != nil {
 				logger.Errorw("failed to write response", "error", err)
 			}
-
-			return
 		})
 	}
 }

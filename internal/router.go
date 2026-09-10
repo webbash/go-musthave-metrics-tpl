@@ -1,3 +1,4 @@
+// Package internal assembles the application's HTTP routes.
 package internal
 
 import (
@@ -9,17 +10,18 @@ import (
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/audit"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/config"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/crypto"
-	"github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/get_value"
-	"github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/get_value_list"
-	"github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/get_value_metric"
-	"github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/ping_db"
+	getvalue "github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/get_value"
+	getvaluelist "github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/get_value_list"
+	getvaluemetric "github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/get_value_metric"
+	pingdb "github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/ping_db"
 	update_handler "github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/update"
-	"github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/update_batch"
-	update_metric_handler "github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/update_metric"
+	updatebatch "github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/update_batch"
+	updatemetric "github.com/webbash/go-musthave-metrics-tpl.git/internal/handler/update_metric"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/middleware"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
 )
 
+// generate:reset
 type Router struct {
 	cfg            config.Config
 	logger         *zap.SugaredLogger
@@ -43,13 +45,13 @@ func NewRouter(cfg config.Config, logger *zap.SugaredLogger, metricsService *ser
 }
 
 func (r *Router) Init() *chi.Mux {
-	pingH := ping_db.NewHandler(r.db, r.logger)
+	pingH := pingdb.NewHandler(r.db, r.logger)
 	updateH := update_handler.NewHandler(r.metricsService, r.subject, r.logger)
-	updateMetricH := update_metric_handler.NewHandler(r.metricsService, r.subject, r.logger)
-	updateBatchH := update_batch.NewHandler(r.metricsService, r.logger, r.subject)
-	getValueMetricH := get_value_metric.NewHandler(r.metricsService)
-	getValueH := get_value.NewHandler(r.metricsService)
-	getValueListH := get_value_list.NewHandler(r.repository)
+	updateMetricH := updatemetric.NewHandler(r.metricsService, r.subject, r.logger)
+	updateBatchH := updatebatch.NewHandler(r.metricsService, r.logger, r.subject)
+	getValueMetricH := getvaluemetric.NewHandler(r.metricsService)
+	getValueH := getvalue.NewHandler(r.metricsService)
+	getValueListH := getvaluelist.NewHandler(r.repository)
 
 	r.router.Use(middleware.LoggingMiddleware(r.logger))
 	r.router.Use(middleware.GzipMiddleware())

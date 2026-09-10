@@ -66,7 +66,7 @@ func (a *Sender) sendMetrics(ctx context.Context, metric []models.Metrics) error
 
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
-	if _, err := gz.Write(body); err != nil {
+	if _, err = gz.Write(body); err != nil {
 		return fmt.Errorf("gzip write: %w", err)
 	}
 	err = gz.Close()
@@ -74,12 +74,12 @@ func (a *Sender) sendMetrics(ctx context.Context, metric []models.Metrics) error
 		return fmt.Errorf("gzip closing: %w", err)
 	}
 
-	updateUrl, err := url.JoinPath(a.baseURL, "/updates")
+	updateURL, err := url.JoinPath(a.baseURL, "/updates")
 	if err != nil {
 		return fmt.Errorf("create url: %w", err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, updateUrl, &buf)
+	req, err := http.NewRequest(http.MethodPost, updateURL, &buf)
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}

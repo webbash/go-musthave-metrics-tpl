@@ -1,3 +1,4 @@
+// Package repository provides metric repository implementations.
 package repository
 
 import (

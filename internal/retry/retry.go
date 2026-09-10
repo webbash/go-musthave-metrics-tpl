@@ -1,3 +1,4 @@
+// Package retry provides retry helpers for transient operations.
 package retry
 
 import (

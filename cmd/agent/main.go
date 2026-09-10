@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -18,6 +19,12 @@ import (
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/agent"
 )
 
+var (
+	buildVersion = "N/A"
+	buildDate    = "N/A"
+	buildCommit  = "N/A"
+)
+
 type Config struct {
 	Address        string `env:"ADDRESS"`
 	PollInterval   int    `env:"POLL_INTERVAL"`
@@ -27,6 +34,8 @@ type Config struct {
 }
 
 func main() {
+	fmt.Printf("Build version: %s\nBuild date: %s\nBuild commit: %s\n", buildVersion, buildDate, buildCommit)
+
 	var cfg Config
 	err := env.Parse(&cfg)
 	if err != nil {

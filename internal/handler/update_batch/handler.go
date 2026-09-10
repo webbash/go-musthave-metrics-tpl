@@ -1,5 +1,5 @@
-// Package update_batch implements the JSON endpoint for batch metric updates.
-package update_batch
+// Package updatebatch implements the JSON endpoint for batch metric updates.
+package updatebatch
 
 import (
 	"bytes"
@@ -49,7 +49,8 @@ func (h Handler) ServeHTTP(res http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.UpdateMany(r.Context(), metrics); err != nil {
+	err = h.service.UpdateMany(r.Context(), metrics)
+	if err != nil {
 		if errors.Is(err, service.ErrUnknownMetricType) {
 			http.Error(res, "unknown metric type", http.StatusNotImplemented)
 			return

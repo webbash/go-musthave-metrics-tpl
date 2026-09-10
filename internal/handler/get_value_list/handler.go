@@ -1,5 +1,5 @@
-// Package get_value_list implements the endpoint that renders all metrics as HTML.
-package get_value_list
+// Package getvaluelist implements the endpoint that renders all metrics as HTML.
+package getvaluelist
 
 import (
 	"fmt"
