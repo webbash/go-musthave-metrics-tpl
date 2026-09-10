@@ -16,8 +16,6 @@
 //     directives and arguments.
 //   - shadow: reports declarations that shadow existing identifiers from an
 //     outer scope.
-//   - shift: reports invalid or suspicious shift operations, including shifts
-//     that overflow the width of their type.
 //   - structtag: checks the syntax and consistency of struct field tags.
 //   - errorsas: checks errors.As calls for valid target arguments.
 //   - httpresponse: checks that HTTP response bodies are handled correctly.
