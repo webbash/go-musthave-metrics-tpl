@@ -30,9 +30,10 @@ type Router struct {
 	repository     service.MetricsRepository
 	db             *sql.DB
 	subject        *audit.Subject
+	decryptor      *crypto.Decryptor
 }
 
-func NewRouter(cfg config.Config, logger *zap.SugaredLogger, metricsService *service.MetricsService, repository service.MetricsRepository, db *sql.DB, subject *audit.Subject) *Router {
+func NewRouter(cfg config.Config, logger *zap.SugaredLogger, metricsService *service.MetricsService, repository service.MetricsRepository, db *sql.DB, subject *audit.Subject, decryptor *crypto.Decryptor) *Router {
 	return &Router{
 		cfg:            cfg,
 		logger:         logger,
@@ -41,6 +42,7 @@ func NewRouter(cfg config.Config, logger *zap.SugaredLogger, metricsService *ser
 		repository:     repository,
 		db:             db,
 		subject:        subject,
+		decryptor:      decryptor,
 	}
 }
 
@@ -54,6 +56,9 @@ func (r *Router) Init() *chi.Mux {
 	getValueListH := getvaluelist.NewHandler(r.repository)
 
 	r.router.Use(middleware.LoggingMiddleware(r.logger))
+	if r.decryptor != nil {
+		r.router.Use(middleware.DecryptMiddleware(r.decryptor))
+	}
 	r.router.Use(middleware.GzipMiddleware())
 	if r.cfg.HashSecret != "" {
 		signer := crypto.NewSHA256Signer(r.cfg.HashSecret)

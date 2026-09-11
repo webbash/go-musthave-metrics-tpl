@@ -22,14 +22,16 @@ type Sender struct {
 	httpClient *http.Client
 	baseURL    string
 	signer     *crypto.SHA256Signer
+	encryptor  *crypto.Encryptor
 }
 
 // NewSender creates a metrics sender using httpClient and baseURL.
-func NewSender(httpClient *http.Client, baseURL string, signer *crypto.SHA256Signer) *Sender {
+func NewSender(httpClient *http.Client, baseURL string, signer *crypto.SHA256Signer, encryptor *crypto.Encryptor) *Sender {
 	return &Sender{
 		httpClient: httpClient,
 		baseURL:    baseURL,
 		signer:     signer,
+		encryptor:  encryptor,
 	}
 }
 
@@ -79,13 +81,24 @@ func (a *Sender) sendMetrics(ctx context.Context, metric []models.Metrics) error
 		return fmt.Errorf("create url: %w", err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, updateURL, &buf)
+	payload := buf.Bytes()
+	if a.encryptor != nil {
+		payload, err = a.encryptor.Encrypt(payload)
+		if err != nil {
+			return fmt.Errorf("encrypt metrics: %w", err)
+		}
+	}
+
+	req, err := http.NewRequest(http.MethodPost, updateURL, bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept-Encoding", "gzip")
 	req.Header.Set("Content-Encoding", "gzip")
+	if a.encryptor != nil {
+		req.Header.Set(crypto.EncryptedHeader, crypto.EncryptedHeaderValue)
+	}
 	if a.signer != nil {
 		req.Header.Set("HashSHA256", a.signer.Sign(body))
 	}

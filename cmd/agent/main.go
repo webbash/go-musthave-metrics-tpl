@@ -30,6 +30,7 @@ type Config struct {
 	PollInterval   int    `env:"POLL_INTERVAL"`
 	ReportInterval int    `env:"REPORT_INTERVAL"`
 	HashSecret     string `env:"KEY"`
+	CryptoKey      string `env:"CRYPTO_KEY"`
 	RateLimit      int    `env:"RATE_LIMIT"`
 }
 
@@ -46,12 +47,14 @@ func main() {
 	var pollInterval int
 	var reportInterval int
 	var hashSecret string
+	var cryptoKey string
 	var rateLimit int
 
 	flag.StringVar(&address, "a", "localhost:8080", "agent address url")
 	flag.IntVar(&pollInterval, "p", 2, "poll interval in seconds")
 	flag.IntVar(&reportInterval, "r", 10, "report interval in seconds")
 	flag.StringVar(&hashSecret, "k", "", "hash secret for sending metrics")
+	flag.StringVar(&cryptoKey, "crypto-key", "", "path to the server public key")
 	flag.IntVar(&rateLimit, "l", 1, "rate limit")
 
 	flag.Parse()
@@ -68,6 +71,9 @@ func main() {
 	if cfg.HashSecret != "" {
 		hashSecret = cfg.HashSecret
 	}
+	if cfg.CryptoKey != "" {
+		cryptoKey = cfg.CryptoKey
+	}
 
 	if cfg.RateLimit != 0 {
 		rateLimit = cfg.RateLimit
@@ -76,6 +82,15 @@ func main() {
 	var signer *crypto.SHA256Signer
 	if hashSecret != "" {
 		signer = crypto.NewSHA256Signer(hashSecret)
+	}
+
+	var encryptor *crypto.Encryptor
+	if cryptoKey != "" {
+		publicKey, err := crypto.LoadPublicKey(cryptoKey)
+		if err != nil {
+			log.Fatalf("load public crypto key: %v", err)
+		}
+		encryptor = crypto.NewEncryptor(publicKey)
 	}
 
 	sugar := logger.NewLogger()
@@ -92,5 +107,6 @@ func main() {
 		signer,
 		rateLimit,
 		sugar,
+		encryptor,
 	).Loop(ctx)
 }
