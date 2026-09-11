@@ -18,6 +18,7 @@ import (
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/audit"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/config"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/config/db"
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/crypto"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/logger"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/repository"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
@@ -86,7 +87,16 @@ func main() {
 	repo := buildRepository(cfg, sugar, fileStorage, database)
 	metricsService := service.NewMetricsService(repo)
 
-	r := internal.NewRouter(cfg, sugar, metricsService, repo, database, obsSubject).Init()
+	var decryptor *crypto.Decryptor
+	if cfg.CryptoKey != "" {
+		privateKey, err := crypto.LoadPrivateKey(cfg.CryptoKey)
+		if err != nil {
+			sugar.Fatalw("failed to load private crypto key", "err", err)
+		}
+		decryptor = crypto.NewDecryptor(privateKey)
+	}
+
+	r := internal.NewRouter(cfg, sugar, metricsService, repo, database, obsSubject, decryptor).Init()
 
 	srv := &http.Server{
 		Addr:         cfg.Address,

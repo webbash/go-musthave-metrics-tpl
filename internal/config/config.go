@@ -14,6 +14,7 @@ type Config struct {
 	FileStoragePath string
 	DatabaseDSN     string
 	HashSecret      string
+	CryptoKey       string
 	AuditFile       string
 	AuditURL        string
 }
@@ -27,6 +28,7 @@ func NewConfig() Config {
 	flag.BoolVar(&cfg.Restore, "r", false, "restore metrics from file")
 	flag.StringVar(&cfg.DatabaseDSN, "d", "", "DB connection string")
 	flag.StringVar(&cfg.HashSecret, "k", "", "Hash secret for receiving metrics")
+	flag.StringVar(&cfg.CryptoKey, "crypto-key", "", "path to the server private key")
 	flag.StringVar(&cfg.AuditFile, "audit-file", "", "Path to file for audit")
 	flag.StringVar(&cfg.AuditURL, "audit-url", "", "Url for audit")
 
@@ -58,6 +60,10 @@ func NewConfig() Config {
 
 	if envSecret, ok := os.LookupEnv("KEY"); ok {
 		cfg.HashSecret = envSecret
+	}
+
+	if envCryptoKey, ok := os.LookupEnv("CRYPTO_KEY"); ok {
+		cfg.CryptoKey = envCryptoKey
 	}
 
 	if envAuditFile, ok := os.LookupEnv("AUDIT_FILE"); ok {
