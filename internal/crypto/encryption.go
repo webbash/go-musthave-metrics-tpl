@@ -3,6 +3,7 @@ package crypto
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
@@ -13,7 +14,7 @@ import (
 const (
 	// EncryptedHeader marks requests whose body is encrypted by the agent.
 	EncryptedHeader      = "X-Encrypted"
-	EncryptedHeaderValue = "rsa-pkcs1v15"
+	EncryptedHeaderValue = "rsa-oaep-sha256"
 )
 
 // Encryptor encrypts data with the server's public RSA key.
@@ -36,13 +37,13 @@ func NewDecryptor(privateKey *rsa.PrivateKey) *Decryptor {
 	return &Decryptor{privateKey: privateKey}
 }
 
-// Encrypt encrypts one message with RSA PKCS#1 v1.5 padding.
+// Encrypt encrypts one message with RSA-OAEP and SHA-256.
 func (e *Encryptor) Encrypt(message []byte) ([]byte, error) {
 	if e == nil || e.publicKey == nil {
 		return nil, errors.New("encrypt: public key is nil")
 	}
 
-	ciphertext, err := rsa.EncryptPKCS1v15(rand.Reader, e.publicKey, message)
+	ciphertext, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, e.publicKey, message, nil)
 	if err != nil {
 		return nil, fmt.Errorf("encrypt message: %w", err)
 	}
@@ -50,13 +51,13 @@ func (e *Encryptor) Encrypt(message []byte) ([]byte, error) {
 	return ciphertext, nil
 }
 
-// Decrypt decrypts one RSA PKCS#1 v1.5 message.
+// Decrypt decrypts one RSA-OAEP message authenticated with SHA-256.
 func (d *Decryptor) Decrypt(ciphertext []byte) ([]byte, error) {
 	if d == nil || d.privateKey == nil {
 		return nil, errors.New("decrypt: private key is nil")
 	}
 
-	message, err := rsa.DecryptPKCS1v15(rand.Reader, d.privateKey, ciphertext)
+	message, err := rsa.DecryptOAEP(sha256.New(), rand.Reader, d.privateKey, ciphertext, nil)
 	if err != nil {
 		return nil, fmt.Errorf("decrypt message: %w", err)
 	}
