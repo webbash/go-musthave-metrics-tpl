@@ -13,6 +13,8 @@ import (
 
 	"github.com/caarlos0/env/v11"
 
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/config"
+
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/crypto"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/logger"
 
@@ -57,7 +59,35 @@ func main() {
 	flag.StringVar(&cryptoKey, "crypto-key", "", "path to the server public key")
 	flag.IntVar(&rateLimit, "l", 1, "rate limit")
 
+	var configPath string
+	flag.StringVar(&configPath, "c", "", "path to JSON configuration")
+	flag.StringVar(&configPath, "config", "", "path to JSON configuration")
 	flag.Parse()
+
+	fileCfg, err := config.ReadAgentFile(configPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	explicit := make(map[string]bool)
+	flag.Visit(func(f *flag.Flag) { explicit[f.Name] = true })
+	if fileCfg.Address != nil && !explicit["a"] {
+		address = *fileCfg.Address
+	}
+	if fileCfg.PollInterval != nil && !explicit["p"] {
+		pollInterval = int(*fileCfg.PollInterval)
+	}
+	if fileCfg.ReportInterval != nil && !explicit["r"] {
+		reportInterval = int(*fileCfg.ReportInterval)
+	}
+	if fileCfg.HashSecret != nil && !explicit["k"] {
+		hashSecret = *fileCfg.HashSecret
+	}
+	if fileCfg.CryptoKey != nil && !explicit["crypto-key"] {
+		cryptoKey = *fileCfg.CryptoKey
+	}
+	if fileCfg.RateLimit != nil && !explicit["l"] {
+		rateLimit = *fileCfg.RateLimit
+	}
 
 	if cfg.Address != "" {
 		address = cfg.Address
