@@ -37,7 +37,7 @@ type Batch struct {
 
 // NewAgent creates an agent configured to send metrics to basicURL.
 // If basicURL has no scheme, http:// is used.
-func NewAgent(basicURL string, pollInterval, reportInterval time.Duration, httpClient *http.Client, signer *crypto.SHA256Signer, rateLimit int, logger *zap.SugaredLogger) *Agent {
+func NewAgent(basicURL string, pollInterval, reportInterval time.Duration, httpClient *http.Client, signer *crypto.SHA256Signer, rateLimit int, logger *zap.SugaredLogger, encryptor *crypto.Encryptor) *Agent {
 	addr := basicURL
 	if !strings.HasPrefix(addr, "http://") && !strings.HasPrefix(addr, "https://") {
 		addr = "http://" + addr
@@ -47,7 +47,7 @@ func NewAgent(basicURL string, pollInterval, reportInterval time.Duration, httpC
 		PollInterval:      pollInterval,
 		ReportInterval:    reportInterval,
 		RateLimit:         rateLimit,
-		sender:            NewSender(httpClient, addr, signer),
+		sender:            NewSender(httpClient, addr, signer, encryptor),
 		logger:            logger,
 		runtimeCollector:  NewRuntimeCollector(),
 		gopsutilCollector: NewGopsutilCollector(),
