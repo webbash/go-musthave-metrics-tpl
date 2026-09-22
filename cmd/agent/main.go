@@ -126,8 +126,11 @@ func main() {
 	sugar := logger.NewLogger()
 	defer sugar.Sync()
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	collectCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGINT)
 	defer stop()
+
+	sendCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	agent.NewAgent(
 		address,
@@ -138,5 +141,5 @@ func main() {
 		rateLimit,
 		sugar,
 		encryptor,
-	).Loop(ctx)
+	).Loop(collectCtx, sendCtx)
 }

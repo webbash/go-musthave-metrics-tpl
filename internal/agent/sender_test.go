@@ -2,6 +2,7 @@ package agent
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -65,4 +67,35 @@ func TestSenderEncryptsCompressedBody(t *testing.T) {
 	sender := NewSender(client, "http://metrics.test", signer, encryptor)
 	require.NoError(t, sender.Send(t.Context(), want))
 	assert.Equal(t, want, got)
+}
+
+func TestSendMetricsRequestContext(t *testing.T) {
+	for _, canceled := range []bool{false, true} {
+		name := "timeout"
+		if canceled {
+			name = "parent cancellation"
+		}
+		t.Run(name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				deadline, ok := req.Context().Deadline()
+				require.True(t, ok, "each request must have a deadline")
+				require.InDelta(t, 10*time.Second, time.Until(deadline), float64(time.Second))
+				if canceled {
+					cancel()
+					require.ErrorIs(t, req.Context().Err(), context.Canceled)
+					return nil, req.Context().Err()
+				}
+				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(nil)), Header: make(http.Header)}, nil
+			})}
+			sender := NewSender(client, "http://metrics.test", nil, nil)
+			err := sender.sendMetrics(ctx, nil)
+			if canceled {
+				require.ErrorIs(t, err, context.Canceled)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }

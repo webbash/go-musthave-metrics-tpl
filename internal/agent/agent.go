@@ -55,7 +55,7 @@ func NewAgent(basicURL string, pollInterval, reportInterval time.Duration, httpC
 }
 
 // Loop starts metric collection and sending until ctx is cancelled.
-func (a *Agent) Loop(ctx context.Context) {
+func (a *Agent) Loop(collectCtx context.Context, sendCtx context.Context) {
 	wg := sync.WaitGroup{}
 
 	// Запускаем горутину для того чтобы собирать метрики из runtime
@@ -72,7 +72,7 @@ func (a *Agent) Loop(ctx context.Context) {
 			select {
 			case <-pollTicker.C:
 				a.runtimeCollector.Collect()
-			case <-ctx.Done():
+			case <-collectCtx.Done():
 				return
 			}
 		}
@@ -94,23 +94,30 @@ func (a *Agent) Loop(ctx context.Context) {
 				if err != nil {
 					a.logger.Errorw("failed to get gopsutil metrics", "err", err)
 				}
-			case <-ctx.Done():
+			case <-collectCtx.Done():
 				return
 			}
 		}
 	}()
 
-	// Запускаем горутину для генерации пакетов метрик
-	chInput := a.batchesGenerator(ctx)
+	collectorsDone := make(chan struct{})
+	chInput := a.batchesGenerator(collectorsDone)
+
 	wp := NewWorkerPool(a.sender, a.RateLimit, chInput, a.logger)
+	wp.Start(sendCtx)
 
-	wp.Start(ctx)
+	wg.Wait()             // сборщики завершились
+	close(collectorsDone) // генератор завершится и закроет канал
+	wp.Wait()             // воркеры закончили отправки
 
-	wp.Wait()
-	wg.Wait()
+	batch := a.makeNewSnapshots()
+	err := a.sender.Send(sendCtx, batch.Metrics)
+	if err != nil {
+		a.logger.Errorw("failed to send final metrics", "err", err)
+	}
 }
 
-func (a *Agent) batchesGenerator(ctx context.Context) <-chan Batch {
+func (a *Agent) batchesGenerator(doneChan <-chan struct{}) <-chan Batch {
 	inputCh := make(chan Batch)
 
 	go func() {
@@ -125,21 +132,24 @@ func (a *Agent) batchesGenerator(ctx context.Context) <-chan Batch {
 		for {
 			select {
 			case <-pollTicker.C:
-				runtimeMetrics := a.runtimeCollector.Snapshot()
-				systemMetrics := a.gopsutilCollector.Snapshot()
-
-				batch := Batch{Metrics: append(runtimeMetrics, systemMetrics...)}
-
+				batch := a.makeNewSnapshots()
 				select {
 				case inputCh <- batch:
-				case <-ctx.Done():
+				case <-doneChan:
 					return
 				}
-			case <-ctx.Done():
+			case <-doneChan:
 				return
 			}
 		}
 	}()
 
 	return inputCh
+}
+
+func (a *Agent) makeNewSnapshots() Batch {
+	runtimeMetrics := a.runtimeCollector.Snapshot()
+	systemMetrics := a.gopsutilCollector.Snapshot()
+
+	return Batch{Metrics: append(runtimeMetrics, systemMetrics...)}
 }

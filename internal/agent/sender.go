@@ -89,7 +89,10 @@ func (a *Sender) sendMetrics(ctx context.Context, metric []models.Metrics) error
 		}
 	}
 
-	req, err := http.NewRequest(http.MethodPost, updateURL, bytes.NewReader(payload))
+	reqCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, updateURL, bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
