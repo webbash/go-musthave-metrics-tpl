@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -122,12 +123,21 @@ func main() {
 		}
 	}()
 
+	stopSaving := make(chan struct{})
+	var savingWG sync.WaitGroup
 	if cfg.StoreInterval != 0 {
+		savingWG.Add(1)
 		go func() {
+			defer savingWG.Done()
 			ticker := time.NewTicker(time.Duration(cfg.StoreInterval) * time.Second)
 			defer ticker.Stop()
 
-			for range ticker.C {
+			for {
+				select {
+				case <-stopSaving:
+					return
+				case <-ticker.C:
+				}
 				metrics, err := repo.GetAllMetrics(context.Background())
 				if err != nil {
 					sugar.Errorw("failed to get all metrics", "err", err)
@@ -144,19 +154,37 @@ func main() {
 
 	// Graceful shutdown
 	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	defer signal.Stop(quit)
 	<-quit
 	sugar.Infow("shutting down server")
-	// Grace period для завершения текущих запросов
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	if err := srv.Shutdown(ctx); err != nil {
-		sugar.Errorw("server forced to shutdown", "err", err)
+	shutdownErr := srv.Shutdown(context.Background())
+	if shutdownErr != nil {
+		sugar.Errorw("failed to shut down server", "err", shutdownErr)
 	}
 
-	cancelAudit()
+	// Дожидаемся текущей записи, чтобы она не перезаписала финальный снимок.
+	close(stopSaving)
+	savingWG.Wait()
+
+	var saveErr error
+	if database == nil && cfg.FileStoragePath != "" {
+		metrics, err := repo.GetAllMetrics(context.Background())
+		if err != nil {
+			saveErr = err
+		} else {
+			saveErr = fileStorage.Save(metrics)
+		}
+		if saveErr != nil {
+			sugar.Errorw("failed to save final metrics", "err", saveErr)
+		}
+	}
+
 	obsSubject.Close()
+	cancelAudit()
+	if shutdownErr != nil || saveErr != nil {
+		return
+	}
 
 	sugar.Infow("server stopped gracefully")
 }
