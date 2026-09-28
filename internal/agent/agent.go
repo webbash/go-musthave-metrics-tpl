@@ -54,8 +54,10 @@ func NewAgent(basicURL string, pollInterval, reportInterval time.Duration, httpC
 	}
 }
 
-// Loop starts metric collection and sending until ctx is cancelled.
-func (a *Agent) Loop(collectCtx context.Context, sendCtx context.Context) {
+// Start launches collectors and workers without waiting for them.
+// The caller cancels collectCtx, waits for collectors, then closes stopBatches
+// and waits for workers before sending the final snapshot.
+func (a *Agent) Start(collectCtx, sendCtx context.Context, stopBatches <-chan struct{}) (*sync.WaitGroup, *WorkerPool) {
 	wg := sync.WaitGroup{}
 
 	// Запускаем горутину для того чтобы собирать метрики из runtime
@@ -100,21 +102,17 @@ func (a *Agent) Loop(collectCtx context.Context, sendCtx context.Context) {
 		}
 	}()
 
-	collectorsDone := make(chan struct{})
-	chInput := a.batchesGenerator(collectorsDone)
+	chInput := a.batchesGenerator(stopBatches)
 
 	wp := NewWorkerPool(a.sender, a.RateLimit, chInput, a.logger)
 	wp.Start(sendCtx)
 
-	wg.Wait()             // сборщики завершились
-	close(collectorsDone) // генератор завершится и закроет канал
-	wp.Wait()             // воркеры закончили отправки
+	return &wg, wp
+}
 
-	batch := a.makeNewSnapshots()
-	err := a.sender.Send(sendCtx, batch.Metrics)
-	if err != nil {
-		a.logger.Errorw("failed to send final metrics", "err", err)
-	}
+// SendSnapshot sends the current metrics and waits for the result.
+func (a *Agent) SendSnapshot(ctx context.Context) error {
+	return a.sender.Send(ctx, a.makeNewSnapshots().Metrics)
 }
 
 func (a *Agent) batchesGenerator(doneChan <-chan struct{}) <-chan Batch {

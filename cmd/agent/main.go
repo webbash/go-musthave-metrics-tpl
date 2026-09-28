@@ -126,13 +126,13 @@ func main() {
 	sugar := logger.NewLogger()
 	defer sugar.Sync()
 
-	collectCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGINT)
+	collectCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 	defer stop()
 
 	sendCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	agent.NewAgent(
+	a := agent.NewAgent(
 		address,
 		time.Duration(pollInterval)*time.Second,
 		time.Duration(reportInterval)*time.Second,
@@ -141,5 +141,15 @@ func main() {
 		rateLimit,
 		sugar,
 		encryptor,
-	).Loop(collectCtx, sendCtx)
+	)
+	stopBatches := make(chan struct{})
+	collectors, workers := a.Start(collectCtx, sendCtx, stopBatches)
+
+	<-collectCtx.Done()
+	collectors.Wait()
+	close(stopBatches)
+	workers.Wait()
+	if err := a.SendSnapshot(sendCtx); err != nil {
+		sugar.Errorw("failed to send final metrics", "err", err)
+	}
 }

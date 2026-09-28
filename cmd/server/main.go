@@ -153,14 +153,18 @@ func main() {
 	}
 
 	// Graceful shutdown
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-	defer signal.Stop(quit)
-	<-quit
+	signalCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	defer stop()
+	<-signalCtx.Done()
 	sugar.Infow("shutting down server")
-	shutdownErr := srv.Shutdown(context.Background())
+	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancelShutdown()
+	shutdownErr := srv.Shutdown(shutdownCtx)
 	if shutdownErr != nil {
 		sugar.Errorw("failed to shut down server", "err", shutdownErr)
+		if err := srv.Close(); err != nil {
+			sugar.Errorw("failed to close server connections", "err", err)
+		}
 	}
 
 	// Дожидаемся текущей записи, чтобы она не перезаписала финальный снимок.

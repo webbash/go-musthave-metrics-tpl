@@ -16,7 +16,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func TestLoopSendsFinalSnapshotBeforeReturning(t *testing.T) {
+func TestSendSnapshotAfterCollectorsStop(t *testing.T) {
 	collectCtx, stop := context.WithCancel(t.Context())
 	stop()
 	var requests int
@@ -35,11 +35,16 @@ func TestLoopSendsFinalSnapshotBeforeReturning(t *testing.T) {
 	})}
 	a := NewAgent("http://metrics.test", time.Hour, time.Hour, client, nil, 2, zap.NewNop().Sugar(), nil)
 	a.runtimeCollector.gaugeMetrics["Alloc"] = 150
-	a.Loop(collectCtx, t.Context())
+	stopBatches := make(chan struct{})
+	collectors, workers := a.Start(collectCtx, t.Context(), stopBatches)
+	collectors.Wait()
+	close(stopBatches)
+	workers.Wait()
+	require.NoError(t, a.SendSnapshot(t.Context()))
 	require.Equal(t, 1, requests)
 }
 
-func TestLoopWaitsForWorkersBeforeFinalSend(t *testing.T) {
+func TestWorkersFinishBeforeFinalSend(t *testing.T) {
 	collectCtx, stop := context.WithCancel(t.Context())
 	defer stop()
 	sendCtx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
@@ -66,7 +71,16 @@ func TestLoopWaitsForWorkersBeforeFinalSend(t *testing.T) {
 	})}
 	a := NewAgent("http://metrics.test", time.Hour, time.Millisecond, client, nil, 2, zap.NewNop().Sugar(), nil)
 	done := make(chan struct{})
-	go func() { a.Loop(collectCtx, sendCtx); close(done) }()
+	stopBatches := make(chan struct{})
+	collectors, workers := a.Start(collectCtx, sendCtx, stopBatches)
+	finalErr := make(chan error, 1)
+	go func() {
+		collectors.Wait()
+		close(stopBatches)
+		workers.Wait()
+		finalErr <- a.SendSnapshot(sendCtx)
+		close(done)
+	}()
 	for range 2 {
 		select {
 		case <-started:
@@ -77,7 +91,7 @@ func TestLoopWaitsForWorkersBeforeFinalSend(t *testing.T) {
 	stop()
 	select {
 	case <-done:
-		t.Fatal("Loop returned while requests were still running")
+		t.Fatal("shutdown returned while requests were still running")
 	case <-time.After(20 * time.Millisecond):
 	}
 	require.EqualValues(t, 2, calls.Load(), "final send must wait for workers")
@@ -85,8 +99,9 @@ func TestLoopWaitsForWorkersBeforeFinalSend(t *testing.T) {
 	select {
 	case <-done:
 	case <-sendCtx.Done():
-		t.Fatal("Loop did not finish after requests completed")
+		t.Fatal("shutdown did not finish after requests completed")
 	}
+	require.NoError(t, <-finalErr)
 	require.GreaterOrEqual(t, calls.Load(), int32(3), "final snapshot must be sent")
 	require.False(t, premature.Load(), "final send overlapped earlier requests")
 }
