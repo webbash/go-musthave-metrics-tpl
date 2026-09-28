@@ -31,3 +31,7 @@ reset.gen.go
 
 # Engram AI agent memory
 .engram/
+
+# Local configuration
+/configs/agent.json
+/configs/server.json

@@ -3,6 +3,8 @@ package middleware
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/rand"
+	"crypto/rsa"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -132,6 +134,34 @@ func TestHashCheckMiddleware(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, recorder.Code)
 	})
+}
+
+func TestDecryptMiddleware(t *testing.T) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	encryptor := crypto.NewEncryptor(&privateKey.PublicKey)
+	decryptor := crypto.NewDecryptor(privateKey)
+
+	next := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		body, err := io.ReadAll(request.Body)
+		require.NoError(t, err)
+		writer.WriteHeader(http.StatusOK)
+		_, _ = writer.Write(body)
+	})
+	handler := DecryptMiddleware(decryptor)(GzipMiddleware()(next))
+
+	compressed := gzipData(t, []byte(`{"ok":true}`)).Bytes()
+	ciphertext, err := encryptor.Encrypt(compressed)
+	require.NoError(t, err)
+	request := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(ciphertext))
+	request.Header.Set(crypto.EncryptedHeader, crypto.EncryptedHeaderValue)
+	request.Header.Set("Content-Encoding", "gzip")
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, request)
+
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	assert.Equal(t, `{"ok":true}`, recorder.Body.String())
 }
 
 func TestLoggingMiddleware(t *testing.T) {
