@@ -37,7 +37,7 @@ type Batch struct {
 
 // NewAgent creates an agent configured to send metrics to basicURL.
 // If basicURL has no scheme, http:// is used.
-func NewAgent(basicURL string, pollInterval, reportInterval time.Duration, httpClient *http.Client, signer *crypto.SHA256Signer, rateLimit int, logger *zap.SugaredLogger) *Agent {
+func NewAgent(basicURL string, pollInterval, reportInterval time.Duration, httpClient *http.Client, signer *crypto.SHA256Signer, rateLimit int, logger *zap.SugaredLogger, encryptor *crypto.Encryptor) *Agent {
 	addr := basicURL
 	if !strings.HasPrefix(addr, "http://") && !strings.HasPrefix(addr, "https://") {
 		addr = "http://" + addr
@@ -47,15 +47,17 @@ func NewAgent(basicURL string, pollInterval, reportInterval time.Duration, httpC
 		PollInterval:      pollInterval,
 		ReportInterval:    reportInterval,
 		RateLimit:         rateLimit,
-		sender:            NewSender(httpClient, addr, signer),
+		sender:            NewSender(httpClient, addr, signer, encryptor),
 		logger:            logger,
 		runtimeCollector:  NewRuntimeCollector(),
 		gopsutilCollector: NewGopsutilCollector(),
 	}
 }
 
-// Loop starts metric collection and sending until ctx is cancelled.
-func (a *Agent) Loop(ctx context.Context) {
+// Start launches collectors and workers without waiting for them.
+// The caller cancels collectCtx, waits for collectors, then closes stopBatches
+// and waits for workers before sending the final snapshot.
+func (a *Agent) Start(collectCtx, sendCtx context.Context, stopBatches <-chan struct{}) (*sync.WaitGroup, *WorkerPool) {
 	wg := sync.WaitGroup{}
 
 	// Запускаем горутину для того чтобы собирать метрики из runtime
@@ -72,7 +74,7 @@ func (a *Agent) Loop(ctx context.Context) {
 			select {
 			case <-pollTicker.C:
 				a.runtimeCollector.Collect()
-			case <-ctx.Done():
+			case <-collectCtx.Done():
 				return
 			}
 		}
@@ -94,23 +96,26 @@ func (a *Agent) Loop(ctx context.Context) {
 				if err != nil {
 					a.logger.Errorw("failed to get gopsutil metrics", "err", err)
 				}
-			case <-ctx.Done():
+			case <-collectCtx.Done():
 				return
 			}
 		}
 	}()
 
-	// Запускаем горутину для генерации пакетов метрик
-	chInput := a.batchesGenerator(ctx)
+	chInput := a.batchesGenerator(stopBatches)
+
 	wp := NewWorkerPool(a.sender, a.RateLimit, chInput, a.logger)
+	wp.Start(sendCtx)
 
-	wp.Start(ctx)
-
-	wp.Wait()
-	wg.Wait()
+	return &wg, wp
 }
 
-func (a *Agent) batchesGenerator(ctx context.Context) <-chan Batch {
+// SendSnapshot sends the current metrics and waits for the result.
+func (a *Agent) SendSnapshot(ctx context.Context) error {
+	return a.sender.Send(ctx, a.makeNewSnapshots().Metrics)
+}
+
+func (a *Agent) batchesGenerator(doneChan <-chan struct{}) <-chan Batch {
 	inputCh := make(chan Batch)
 
 	go func() {
@@ -125,21 +130,24 @@ func (a *Agent) batchesGenerator(ctx context.Context) <-chan Batch {
 		for {
 			select {
 			case <-pollTicker.C:
-				runtimeMetrics := a.runtimeCollector.Snapshot()
-				systemMetrics := a.gopsutilCollector.Snapshot()
-
-				batch := Batch{Metrics: append(runtimeMetrics, systemMetrics...)}
-
+				batch := a.makeNewSnapshots()
 				select {
 				case inputCh <- batch:
-				case <-ctx.Done():
+				case <-doneChan:
 					return
 				}
-			case <-ctx.Done():
+			case <-doneChan:
 				return
 			}
 		}
 	}()
 
 	return inputCh
+}
+
+func (a *Agent) makeNewSnapshots() Batch {
+	runtimeMetrics := a.runtimeCollector.Snapshot()
+	systemMetrics := a.gopsutilCollector.Snapshot()
+
+	return Batch{Metrics: append(runtimeMetrics, systemMetrics...)}
 }

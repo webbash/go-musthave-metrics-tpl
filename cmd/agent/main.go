@@ -13,6 +13,8 @@ import (
 
 	"github.com/caarlos0/env/v11"
 
+	"github.com/webbash/go-musthave-metrics-tpl.git/internal/config"
+
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/crypto"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/logger"
 
@@ -30,6 +32,7 @@ type Config struct {
 	PollInterval   int    `env:"POLL_INTERVAL"`
 	ReportInterval int    `env:"REPORT_INTERVAL"`
 	HashSecret     string `env:"KEY"`
+	CryptoKey      string `env:"CRYPTO_KEY"`
 	RateLimit      int    `env:"RATE_LIMIT"`
 }
 
@@ -46,15 +49,45 @@ func main() {
 	var pollInterval int
 	var reportInterval int
 	var hashSecret string
+	var cryptoKey string
 	var rateLimit int
 
 	flag.StringVar(&address, "a", "localhost:8080", "agent address url")
 	flag.IntVar(&pollInterval, "p", 2, "poll interval in seconds")
 	flag.IntVar(&reportInterval, "r", 10, "report interval in seconds")
 	flag.StringVar(&hashSecret, "k", "", "hash secret for sending metrics")
+	flag.StringVar(&cryptoKey, "crypto-key", "", "path to the server public key")
 	flag.IntVar(&rateLimit, "l", 1, "rate limit")
 
+	var configPath string
+	flag.StringVar(&configPath, "c", "", "path to JSON configuration")
+	flag.StringVar(&configPath, "config", "", "path to JSON configuration")
 	flag.Parse()
+
+	fileCfg, err := config.ReadAgentFile(configPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	explicit := make(map[string]bool)
+	flag.Visit(func(f *flag.Flag) { explicit[f.Name] = true })
+	if fileCfg.Address != nil && !explicit["a"] {
+		address = *fileCfg.Address
+	}
+	if fileCfg.PollInterval != nil && !explicit["p"] {
+		pollInterval = int(*fileCfg.PollInterval)
+	}
+	if fileCfg.ReportInterval != nil && !explicit["r"] {
+		reportInterval = int(*fileCfg.ReportInterval)
+	}
+	if fileCfg.HashSecret != nil && !explicit["k"] {
+		hashSecret = *fileCfg.HashSecret
+	}
+	if fileCfg.CryptoKey != nil && !explicit["crypto-key"] {
+		cryptoKey = *fileCfg.CryptoKey
+	}
+	if fileCfg.RateLimit != nil && !explicit["l"] {
+		rateLimit = *fileCfg.RateLimit
+	}
 
 	if cfg.Address != "" {
 		address = cfg.Address
@@ -68,6 +101,9 @@ func main() {
 	if cfg.HashSecret != "" {
 		hashSecret = cfg.HashSecret
 	}
+	if cfg.CryptoKey != "" {
+		cryptoKey = cfg.CryptoKey
+	}
 
 	if cfg.RateLimit != 0 {
 		rateLimit = cfg.RateLimit
@@ -78,13 +114,25 @@ func main() {
 		signer = crypto.NewSHA256Signer(hashSecret)
 	}
 
+	var encryptor *crypto.Encryptor
+	if cryptoKey != "" {
+		publicKey, err := crypto.LoadPublicKey(cryptoKey)
+		if err != nil {
+			log.Fatalf("load public crypto key: %v", err)
+		}
+		encryptor = crypto.NewEncryptor(publicKey)
+	}
+
 	sugar := logger.NewLogger()
 	defer sugar.Sync()
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	collectCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 	defer stop()
 
-	agent.NewAgent(
+	sendCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	a := agent.NewAgent(
 		address,
 		time.Duration(pollInterval)*time.Second,
 		time.Duration(reportInterval)*time.Second,
@@ -92,5 +140,16 @@ func main() {
 		signer,
 		rateLimit,
 		sugar,
-	).Loop(ctx)
+		encryptor,
+	)
+	stopBatches := make(chan struct{})
+	collectors, workers := a.Start(collectCtx, sendCtx, stopBatches)
+
+	<-collectCtx.Done()
+	collectors.Wait()
+	close(stopBatches)
+	workers.Wait()
+	if err := a.SendSnapshot(sendCtx); err != nil {
+		sugar.Errorw("failed to send final metrics", "err", err)
+	}
 }
