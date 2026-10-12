@@ -18,6 +18,7 @@ type Config struct {
 	CryptoKey       string
 	AuditFile       string
 	AuditURL        string
+	TrustedSubnet   string
 }
 
 func NewConfig() Config {
@@ -32,6 +33,7 @@ func NewConfig() Config {
 	flag.StringVar(&cfg.CryptoKey, "crypto-key", "", "path to the server private key")
 	flag.StringVar(&cfg.AuditFile, "audit-file", "", "Path to file for audit")
 	flag.StringVar(&cfg.AuditURL, "audit-url", "", "Url for audit")
+	flag.StringVar(&cfg.TrustedSubnet, "t", "", "trusted agent subnet in CIDR notation")
 
 	var configPath string
 	flag.StringVar(&configPath, "c", "", "path to JSON configuration")
@@ -70,6 +72,9 @@ func NewConfig() Config {
 	}
 	if fileCfg.AuditURL != nil && !explicit["audit-url"] {
 		cfg.AuditURL = *fileCfg.AuditURL
+	}
+	if fileCfg.TrustedSubnet != nil && !explicit["t"] {
+		cfg.TrustedSubnet = *fileCfg.TrustedSubnet
 	}
 
 	if envAddress, ok := os.LookupEnv("ADDRESS"); ok {
@@ -110,6 +115,9 @@ func NewConfig() Config {
 
 	if envAuditURL, ok := os.LookupEnv("AUDIT_URL"); ok {
 		cfg.AuditURL = envAuditURL
+	}
+	if envTrustedSubnet, ok := os.LookupEnv("TRUSTED_SUBNET"); ok {
+		cfg.TrustedSubnet = envTrustedSubnet
 	}
 
 	return cfg
