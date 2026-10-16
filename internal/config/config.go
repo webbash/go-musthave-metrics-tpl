@@ -10,6 +10,8 @@ import (
 
 type Config struct {
 	Address         string
+	Transport       string
+	GRPCAddress     string
 	Restore         bool
 	StoreInterval   int
 	FileStoragePath string
@@ -25,6 +27,8 @@ func NewConfig() Config {
 	cfg := Config{}
 
 	flag.StringVar(&cfg.Address, "a", "localhost:8080", "server endpoint")
+	flag.StringVar(&cfg.Transport, "transport", HTTP, "metrics transport: http or grpc")
+	flag.StringVar(&cfg.GRPCAddress, "grpc-address", DefaultGRPCAddress, "gRPC server endpoint")
 	flag.IntVar(&cfg.StoreInterval, "i", 300, "metric collection to file interval")
 	flag.StringVar(&cfg.FileStoragePath, "f", "./tmp/temporary.json", "file memRepository path")
 	flag.BoolVar(&cfg.Restore, "r", false, "restore metrics from file")
@@ -46,6 +50,12 @@ func NewConfig() Config {
 	}
 	explicit := make(map[string]bool)
 	flag.Visit(func(f *flag.Flag) { explicit[f.Name] = true })
+	if fileCfg.Transport != nil && !explicit["transport"] {
+		cfg.Transport = *fileCfg.Transport
+	}
+	if fileCfg.GRPCAddress != nil && !explicit["grpc-address"] {
+		cfg.GRPCAddress = *fileCfg.GRPCAddress
+	}
 	if fileCfg.Address != nil && !explicit["a"] {
 		cfg.Address = *fileCfg.Address
 	}
@@ -79,6 +89,12 @@ func NewConfig() Config {
 
 	if envAddress, ok := os.LookupEnv("ADDRESS"); ok {
 		cfg.Address = envAddress
+	}
+	if value, ok := os.LookupEnv("TRANSPORT"); ok {
+		cfg.Transport = value
+	}
+	if value, ok := os.LookupEnv("GRPC_ADDRESS"); ok {
+		cfg.GRPCAddress = value
 	}
 
 	if envStoreInterval, ok := os.LookupEnv("STORE_INTERVAL"); ok {

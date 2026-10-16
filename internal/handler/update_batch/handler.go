@@ -1,4 +1,4 @@
-// Package updatebatch implements the JSON endpoint for batch metric updates.
+// Package updatebatch implements HTTP and gRPC handlers for batch metric updates.
 package updatebatch
 
 import (

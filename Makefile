@@ -1,3 +1,16 @@
+PROTOC ?= protoc
+PROTOC_GEN_GO_VERSION := v1.36.11
+PROTOC_GEN_GO_GRPC_VERSION := v1.6.2
+PROTO_TOOLS := $(CURDIR)/tmp/proto-tools
+
+.PHONY: proto
+proto:
+	GOBIN=$(PROTO_TOOLS) go install google.golang.org/protobuf/cmd/protoc-gen-go@$(PROTOC_GEN_GO_VERSION)
+	GOBIN=$(PROTO_TOOLS) go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@$(PROTOC_GEN_GO_GRPC_VERSION)
+	$(PROTOC) --plugin=protoc-gen-go=$(PROTO_TOOLS)/protoc-gen-go --plugin=protoc-gen-go-grpc=$(PROTO_TOOLS)/protoc-gen-go-grpc \
+		--go_out=. --go_opt=module=github.com/webbash/go-musthave-metrics-tpl.git \
+		--go-grpc_out=. --go-grpc_opt=module=github.com/webbash/go-musthave-metrics-tpl.git api/metrics.proto
+
 .PHONY: server
 server:
 	go run ./cmd/server

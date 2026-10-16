@@ -23,7 +23,7 @@ type Agent struct {
 	ReportInterval time.Duration
 	// RateLimit is the maximum number of concurrent workers sending batches.
 	RateLimit         int
-	sender            *Sender
+	sender            MetricsSender
 	runtimeCollector  *RuntimeCollector
 	gopsutilCollector *GopsutilCollector
 	logger            *zap.SugaredLogger
@@ -43,11 +43,16 @@ func NewAgent(basicURL string, pollInterval, reportInterval time.Duration, httpC
 		addr = "http://" + addr
 	}
 
+	return NewAgentWithSender(NewSender(httpClient, addr, signer, encryptor), pollInterval, reportInterval, rateLimit, logger)
+}
+
+// NewAgentWithSender creates an agent independently of its delivery transport.
+func NewAgentWithSender(sender MetricsSender, pollInterval, reportInterval time.Duration, rateLimit int, logger *zap.SugaredLogger) *Agent {
 	return &Agent{
 		PollInterval:      pollInterval,
 		ReportInterval:    reportInterval,
 		RateLimit:         rateLimit,
-		sender:            NewSender(httpClient, addr, signer, encryptor),
+		sender:            sender,
 		logger:            logger,
 		runtimeCollector:  NewRuntimeCollector(),
 		gopsutilCollector: NewGopsutilCollector(),

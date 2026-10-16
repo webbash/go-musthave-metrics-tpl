@@ -29,6 +29,8 @@ var (
 
 type Config struct {
 	Address        string `env:"ADDRESS"`
+	Transport      string `env:"TRANSPORT"`
+	GRPCAddress    string `env:"GRPC_ADDRESS"`
 	PollInterval   int    `env:"POLL_INTERVAL"`
 	ReportInterval int    `env:"REPORT_INTERVAL"`
 	HashSecret     string `env:"KEY"`
@@ -36,16 +38,16 @@ type Config struct {
 	RateLimit      int    `env:"RATE_LIMIT"`
 }
 
-func main() {
-	fmt.Printf("Build version: %s\nBuild date: %s\nBuild commit: %s\n", buildVersion, buildDate, buildCommit)
-
+func loadConfig() (Config, error) {
 	var cfg Config
 	err := env.Parse(&cfg)
 	if err != nil {
-		log.Fatal(err)
+		return Config{}, err
 	}
 
 	var address string
+	var transport string
+	var grpcAddress string
 	var pollInterval int
 	var reportInterval int
 	var hashSecret string
@@ -53,6 +55,8 @@ func main() {
 	var rateLimit int
 
 	flag.StringVar(&address, "a", "localhost:8080", "agent address url")
+	flag.StringVar(&transport, "transport", config.HTTP, "metrics transport: http or grpc")
+	flag.StringVar(&grpcAddress, "grpc-address", config.DefaultGRPCAddress, "gRPC server endpoint")
 	flag.IntVar(&pollInterval, "p", 2, "poll interval in seconds")
 	flag.IntVar(&reportInterval, "r", 10, "report interval in seconds")
 	flag.StringVar(&hashSecret, "k", "", "hash secret for sending metrics")
@@ -66,10 +70,16 @@ func main() {
 
 	fileCfg, err := config.ReadAgentFile(configPath)
 	if err != nil {
-		log.Fatal(err)
+		return Config{}, err
 	}
 	explicit := make(map[string]bool)
 	flag.Visit(func(f *flag.Flag) { explicit[f.Name] = true })
+	if fileCfg.Transport != nil && !explicit["transport"] {
+		transport = *fileCfg.Transport
+	}
+	if fileCfg.GRPCAddress != nil && !explicit["grpc-address"] {
+		grpcAddress = *fileCfg.GRPCAddress
+	}
 	if fileCfg.Address != nil && !explicit["a"] {
 		address = *fileCfg.Address
 	}
@@ -92,6 +102,12 @@ func main() {
 	if cfg.Address != "" {
 		address = cfg.Address
 	}
+	if cfg.Transport != "" {
+		transport = cfg.Transport
+	}
+	if cfg.GRPCAddress != "" {
+		grpcAddress = cfg.GRPCAddress
+	}
 	if cfg.PollInterval != 0 {
 		pollInterval = cfg.PollInterval
 	}
@@ -109,18 +125,19 @@ func main() {
 		rateLimit = cfg.RateLimit
 	}
 
-	var signer *crypto.SHA256Signer
-	if hashSecret != "" {
-		signer = crypto.NewSHA256Signer(hashSecret)
-	}
+	return Config{Address: address, Transport: transport, GRPCAddress: grpcAddress,
+		PollInterval: pollInterval, ReportInterval: reportInterval,
+		HashSecret: hashSecret, CryptoKey: cryptoKey, RateLimit: rateLimit}, nil
+}
 
-	var encryptor *crypto.Encryptor
-	if cryptoKey != "" {
-		publicKey, err := crypto.LoadPublicKey(cryptoKey)
-		if err != nil {
-			log.Fatalf("load public crypto key: %v", err)
-		}
-		encryptor = crypto.NewEncryptor(publicKey)
+func main() {
+	fmt.Printf("Build version: %s\nBuild date: %s\nBuild commit: %s\n", buildVersion, buildDate, buildCommit)
+	cfg, err := loadConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := config.ValidateTransport(cfg.Transport); err != nil {
+		log.Fatal(err)
 	}
 
 	sugar := logger.NewLogger()
@@ -132,16 +149,34 @@ func main() {
 	sendCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	a := agent.NewAgent(
-		address,
-		time.Duration(pollInterval)*time.Second,
-		time.Duration(reportInterval)*time.Second,
-		&http.Client{},
-		signer,
-		rateLimit,
-		sugar,
-		encryptor,
-	)
+	var a *agent.Agent
+	if cfg.Transport == config.GRPC {
+		if cfg.GRPCAddress == "" {
+			log.Fatal("gRPC address must not be empty")
+		}
+		sender, err := agent.NewGRPCSender(cfg.GRPCAddress)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer sender.Close()
+		a = agent.NewAgentWithSender(sender, time.Duration(cfg.PollInterval)*time.Second,
+			time.Duration(cfg.ReportInterval)*time.Second, cfg.RateLimit, sugar)
+	} else {
+		var signer *crypto.SHA256Signer
+		if cfg.HashSecret != "" {
+			signer = crypto.NewSHA256Signer(cfg.HashSecret)
+		}
+		var encryptor *crypto.Encryptor
+		if cfg.CryptoKey != "" {
+			publicKey, err := crypto.LoadPublicKey(cfg.CryptoKey)
+			if err != nil {
+				log.Fatalf("load public crypto key: %v", err)
+			}
+			encryptor = crypto.NewEncryptor(publicKey)
+		}
+		a = agent.NewAgent(cfg.Address, time.Duration(cfg.PollInterval)*time.Second,
+			time.Duration(cfg.ReportInterval)*time.Second, &http.Client{}, signer, cfg.RateLimit, sugar, encryptor)
+	}
 	stopBatches := make(chan struct{})
 	collectors, workers := a.Start(collectCtx, sendCtx, stopBatches)
 
