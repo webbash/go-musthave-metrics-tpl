@@ -10,6 +10,7 @@ import (
 )
 
 func TestTransportConfiguration(t *testing.T) {
+	stringPointer := func(value string) *string { return &value }
 	path := filepath.Join(t.TempDir(), "server.json")
 	require.NoError(t, os.WriteFile(path, []byte(`{"transport":"grpc","grpc_address":"json:8081"}`), 0600))
 	for _, tc := range []struct {
