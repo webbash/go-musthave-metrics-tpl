@@ -1,6 +1,6 @@
 module github.com/webbash/go-musthave-metrics-tpl.git
 
-go 1.26
+go 1.27.0
 
 require (
 	github.com/caarlos0/env/v11 v11.4.1
