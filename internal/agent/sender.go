@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"time"
 
@@ -105,6 +106,17 @@ func (a *Sender) sendMetrics(ctx context.Context, metric []models.Metrics) error
 	if a.signer != nil {
 		req.Header.Set("HashSHA256", a.signer.Sign(body))
 	}
+
+	// GotConn runs before the request is written, including for reused connections.
+	// Keep the address on this request so concurrent workers use their own IP.
+	trace := &httptrace.ClientTrace{
+		GotConn: func(info httptrace.GotConnInfo) {
+			if address, ok := info.Conn.LocalAddr().(*net.TCPAddr); ok {
+				req.Header.Set("X-Real-IP", address.IP.String())
+			}
+		},
+	}
+	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {

@@ -7,8 +7,11 @@ import (
 	"crypto/rsa"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httptrace"
+	"sync"
 	"testing"
 	"time"
 
@@ -96,6 +99,61 @@ func TestSendMetricsRequestContext(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
+		})
+	}
+}
+
+func TestSenderRealIP(t *testing.T) {
+	for _, tc := range []struct {
+		name, network, address, subnet string
+	}{
+		{"IPv4", "tcp4", "127.0.0.1:0", "127.0.0.0/8"},
+		{"IPv6", "tcp6", "[::1]:0", "::1/128"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			listener, err := net.Listen(tc.network, tc.address)
+			if err != nil && tc.network == "tcp6" {
+				t.Skipf("IPv6 unavailable: %v", err)
+			}
+			require.NoError(t, err)
+			addresses := make(chan string, 6)
+			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				peer, _, err := net.SplitHostPort(r.RemoteAddr)
+				if err != nil || r.Header.Get("X-Real-IP") != peer {
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				addresses <- peer
+				w.WriteHeader(http.StatusOK)
+			})
+			server := httptest.NewUnstartedServer(middleware.TrustedSubnetMiddleware(tc.subnet)(next))
+			require.NoError(t, server.Listener.Close())
+			server.Listener = listener
+			server.Start()
+			t.Cleanup(server.Close)
+			client := server.Client()
+			t.Cleanup(client.CloseIdleConnections)
+			sender := NewSender(client, server.URL, nil, nil)
+			// Exercise both a reused connection and concurrent worker requests.
+			reused := make(chan bool, 2)
+			ctx := httptrace.WithClientTrace(t.Context(), &httptrace.ClientTrace{
+				GotConn: func(info httptrace.GotConnInfo) { reused <- info.Reused },
+			})
+			require.NoError(t, sender.Send(ctx, nil))
+			require.NoError(t, sender.Send(ctx, nil))
+			require.False(t, <-reused, "the first request opens a connection")
+			require.True(t, <-reused, "the second request must reuse the connection")
+			var workers sync.WaitGroup
+			errors := make(chan error, 4)
+			for range 4 {
+				workers.Go(func() { errors <- sender.Send(t.Context(), nil) })
+			}
+			workers.Wait()
+			close(errors)
+			for err := range errors {
+				require.NoError(t, err)
+			}
+			require.Len(t, addresses, 6)
 		})
 	}
 }

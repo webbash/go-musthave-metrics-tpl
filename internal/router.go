@@ -68,8 +68,13 @@ func (r *Router) Init() *chi.Mux {
 	r.router.Get("/", getValueListH.ServeHTTP)
 	r.router.Post("/value", getValueMetricH.ServeHTTP)
 	r.router.Post("/value/", getValueMetricH.ServeHTTP)
-	r.router.Post("/updates", updateBatchH.ServeHTTP)
-	r.router.Post("/updates/", updateBatchH.ServeHTTP)
+	if r.cfg.TrustedSubnet != "" {
+		r.router.With(middleware.TrustedSubnetMiddleware(r.cfg.TrustedSubnet)).Post("/updates", updateBatchH.ServeHTTP)
+		r.router.With(middleware.TrustedSubnetMiddleware(r.cfg.TrustedSubnet)).Post("/updates/", updateBatchH.ServeHTTP)
+	} else {
+		r.router.Post("/updates", updateBatchH.ServeHTTP)
+		r.router.Post("/updates/", updateBatchH.ServeHTTP)
+	}
 	r.router.Post("/update", updateMetricH.ServeHTTP)
 	r.router.Post("/update/", updateMetricH.ServeHTTP)
 	r.router.Get("/value/{metricType}/{metricName}", getValueH.ServeHTTP)

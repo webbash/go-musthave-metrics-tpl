@@ -94,5 +94,19 @@ Showing nodes accounting for -128412.31MB, 84.39% of 152173.01MB total
 Сервер и агент поддерживают `-c`, `-config` и переменную окружения `CONFIG`.
 Приоритет: окружение → явно заданные флаги → JSON → значения по умолчанию.
 
-Примеры: [сервер](configs/server.json), [агент](configs/agent.json).
+Примеры: [сервер](configs/server.example.json), [агент](configs/agent.example.json).
 Все параметры и команды запуска описаны в [документации конфигурации](internal/config/README.md).
+
+## gRPC (инкремент 28)
+
+Агент и сервер поддерживают `-transport=http|grpc`; по умолчанию используется HTTP.
+Сервер запускает только выбранный транспорт. Для обмена по gRPC выберите `grpc`
+на обеих сторонах и настройте `-grpc-address` / `GRPC_ADDRESS`.
+
+Контракт находится в `api/metrics.proto`, сгенерированный Go-код — в `internal/proto`.
+Для повторной генерации установите protoc 36.2 и выполните `make proto`;
+версии Go-генераторов закреплены в Makefile. Сгенерированные файлы хранятся в репозитории,
+поэтому protoc не нужен для обычной сборки.
+
+Описание конфигурации и запуска: [internal/config](internal/config/README.md).
+Решения первой версии: [ADR](docs/adr/0001-http-and-grpc-transports.md).
