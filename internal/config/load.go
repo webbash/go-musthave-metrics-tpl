@@ -11,6 +11,8 @@ import (
 type ServerFile struct {
 	Transport     *string  `json:"transport"`
 	GRPCAddress   *string  `json:"grpc_address"`
+	GRPCTLSCert   *string  `json:"grpc_tls_cert"`
+	GRPCTLSKey    *string  `json:"grpc_tls_key"`
 	Address       *string  `json:"address"`
 	Restore       *bool    `json:"restore"`
 	StoreInterval *Seconds `json:"store_interval"`
@@ -26,6 +28,7 @@ type ServerFile struct {
 type AgentFile struct {
 	Transport      *string  `json:"transport"`
 	GRPCAddress    *string  `json:"grpc_address"`
+	GRPCTLSCert    *string  `json:"grpc_tls_cert"`
 	Address        *string  `json:"address"`
 	PollInterval   *Seconds `json:"poll_interval"`
 	ReportInterval *Seconds `json:"report_interval"`

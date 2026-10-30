@@ -19,10 +19,15 @@ type GRPCSender struct {
 	client pb.MetricsClient
 }
 
-// NewGRPCSender creates a plaintext client with connection-specific IP metadata.
-func NewGRPCSender(address string) (*GRPCSender, error) {
+// NewGRPCSender creates a TLS client with connection-specific IP metadata.
+// certFile contains trusted CA certificates or the server's self-signed certificate.
+func NewGRPCSender(address, certFile string) (*GRPCSender, error) {
+	transport, err := newLocalIPTransport(certFile)
+	if err != nil {
+		return nil, err
+	}
 	conn, err := grpc.NewClient(address,
-		grpc.WithTransportCredentials(newLocalIPTransport()),
+		grpc.WithTransportCredentials(transport),
 		grpc.WithPerRPCCredentials(localIPMetadata{}),
 		grpc.WithDisableRetry(),
 	)

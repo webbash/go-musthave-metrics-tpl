@@ -11,6 +11,16 @@ proto:
 		--go_out=. --go_opt=module=github.com/webbash/go-musthave-metrics-tpl.git \
 		--go-grpc_out=. --go-grpc_opt=module=github.com/webbash/go-musthave-metrics-tpl.git api/metrics.proto
 
+# Local development only. Private keys stay in the ignored tmp directory.
+.PHONY: grpc-certs
+grpc-certs:
+	mkdir -p tmp/certs
+	test ! -e tmp/certs/server.key && test ! -e tmp/certs/server.crt
+	umask 077; openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days 365 \
+		-keyout tmp/certs/server.key -out tmp/certs/server.crt -subj '/CN=localhost' \
+		-addext 'subjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1' \
+		-addext 'extendedKeyUsage=serverAuth'
+
 .PHONY: server
 server:
 	go run ./cmd/server

@@ -2,9 +2,17 @@ package main
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"database/sql"
+	"encoding/pem"
+	"math/big"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -21,7 +29,7 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
@@ -37,9 +45,20 @@ func (f updateFunc) UpdateMany(ctx context.Context, metrics []models.Metrics) er
 	return f(ctx, metrics)
 }
 
-func startServer(t *testing.T, address, subnet string, svc batchUpdater) *grpcMetricsServer {
+type testGRPCServer struct {
+	*grpcMetricsServer
+	certFile, keyFile string
+}
+
+func startServer(t *testing.T, address, subnet string, svc batchUpdater) *testGRPCServer {
 	t.Helper()
-	s, err := newGRPCMetricsServer(address, subnet, updatebatch.NewGRPCHandler(svc, zap.NewNop().Sugar()))
+	certFile, keyFile := testTLSFiles(t)
+	return startServerWithTLS(t, address, subnet, certFile, keyFile, svc)
+}
+
+func startServerWithTLS(t *testing.T, address, subnet, certFile, keyFile string, svc batchUpdater) *testGRPCServer {
+	t.Helper()
+	s, err := newGRPCMetricsServer(address, subnet, certFile, keyFile, updatebatch.NewGRPCHandler(svc, zap.NewNop().Sugar()))
 	require.NoError(t, err)
 	done := make(chan error, 1)
 	go func() { done <- s.Serve() }()
@@ -49,12 +68,14 @@ func startServer(t *testing.T, address, subnet string, svc batchUpdater) *grpcMe
 		_ = s.Shutdown(ctx)
 		require.NoError(t, <-done)
 	})
-	return s
+	return &testGRPCServer{grpcMetricsServer: s, certFile: certFile, keyFile: keyFile}
 }
 
-func newClient(t *testing.T, s *grpcMetricsServer) pb.MetricsClient {
+func newClient(t *testing.T, s *testGRPCServer) pb.MetricsClient {
 	t.Helper()
-	conn, err := grpc.NewClient(s.listener.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	creds, err := credentials.NewClientTLSFromFile(s.certFile, "")
+	require.NoError(t, err)
+	conn, err := grpc.NewClient(s.listener.Addr().String(), grpc.WithTransportCredentials(creds))
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, conn.Close()) })
 	return pb.NewMetricsClient(conn)
@@ -85,7 +106,7 @@ func TestSenderIPMatchesConnectionAcrossWorkersAndReconnect(t *testing.T) {
 			})
 			s := startServer(t, tc.address, tc.subnet, svc)
 			address := s.listener.Addr().String()
-			sender, err := agent.NewGRPCSender(address)
+			sender, err := agent.NewGRPCSender(address, s.certFile)
 			require.NoError(t, err)
 			t.Cleanup(func() { require.NoError(t, sender.Close()) })
 			value := 0.0
@@ -110,7 +131,7 @@ func TestSenderIPMatchesConnectionAcrossWorkersAndReconnect(t *testing.T) {
 				require.Equal(t, first, <-addresses)
 			}
 			require.NoError(t, s.Shutdown(ctx))
-			startServer(t, address, tc.subnet, svc)
+			startServerWithTLS(t, address, tc.subnet, s.certFile, s.keyFile, svc)
 			require.NoError(t, sender.Send(ctx, batch))
 			require.NotEqual(t, first, <-addresses, "reconnected RPC uses a new TCP connection")
 		})
@@ -206,7 +227,7 @@ func TestPostgresRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	repo := repository.NewPostgresRepository(db)
 	s := startServer(t, "127.0.0.1:0", "127.0.0.0/8", service.NewMetricsService(repo))
-	sender, err := agent.NewGRPCSender(s.listener.Addr().String())
+	sender, err := agent.NewGRPCSender(s.listener.Addr().String(), s.certFile)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, sender.Close()) })
 	delta, value := int64(5), 23.5
@@ -237,4 +258,31 @@ func TestPostgresRoundTrip(t *testing.T) {
 	counter, err = repo.GetCounter(t.Context(), "PollCount")
 	require.NoError(t, err)
 	require.EqualValues(t, 10, counter, "database error must roll back the entire batch")
+}
+
+// Each test uses its own short-lived certificate, never a checked-in private key.
+func testTLSFiles(t *testing.T) (certFile, keyFile string) {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	require.NoError(t, err)
+	cert := &x509.Certificate{
+		SerialNumber: serial,
+		Subject:      pkix.Name{CommonName: "localhost"},
+		DNSNames:     []string{"localhost"},
+		IPAddresses:  []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")},
+		NotBefore:    time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour),
+		KeyUsage:    x509.KeyUsageDigitalSignature,
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, cert, cert, &key.PublicKey, key)
+	require.NoError(t, err)
+	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
+	require.NoError(t, err)
+	dir := t.TempDir()
+	certFile, keyFile = filepath.Join(dir, "server.crt"), filepath.Join(dir, "server.key")
+	require.NoError(t, os.WriteFile(certFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0600))
+	require.NoError(t, os.WriteFile(keyFile, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER}), 0600))
+	return certFile, keyFile
 }

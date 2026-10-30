@@ -9,6 +9,7 @@ import (
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/middleware"
 	pb "github.com/webbash/go-musthave-metrics-tpl.git/internal/proto"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 // grpcMetricsServer owns the listener and waits for handlers during shutdown.
@@ -17,7 +18,7 @@ type grpcMetricsServer struct {
 	listener net.Listener
 }
 
-func newGRPCMetricsServer(address, trustedSubnet string, handler pb.MetricsServer) (*grpcMetricsServer, error) {
+func newGRPCMetricsServer(address, trustedSubnet, certFile, keyFile string, handler pb.MetricsServer) (*grpcMetricsServer, error) {
 	interceptor, err := middleware.TrustedSubnetInterceptor(trustedSubnet)
 	if err != nil {
 		return nil, err
@@ -25,11 +26,18 @@ func newGRPCMetricsServer(address, trustedSubnet string, handler pb.MetricsServe
 	if address == "" {
 		return nil, fmt.Errorf("gRPC address must not be empty")
 	}
+	if certFile == "" || keyFile == "" {
+		return nil, fmt.Errorf("gRPC TLS certificate and private key are required")
+	}
+	tlsCredentials, err := credentials.NewServerTLSFromFile(certFile, keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("load gRPC TLS certificate and private key: %w", err)
+	}
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		return nil, fmt.Errorf("listen gRPC: %w", err)
 	}
-	server := grpc.NewServer(grpc.UnaryInterceptor(interceptor), grpc.WaitForHandlers(true))
+	server := grpc.NewServer(grpc.Creds(tlsCredentials), grpc.UnaryInterceptor(interceptor), grpc.WaitForHandlers(true))
 	pb.RegisterMetricsServer(server, handler)
 	return &grpcMetricsServer{server: server, listener: listener}, nil
 }

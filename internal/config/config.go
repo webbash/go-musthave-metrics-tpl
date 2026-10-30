@@ -12,6 +12,8 @@ type Config struct {
 	Address         string
 	Transport       string
 	GRPCAddress     string
+	GRPCTLSCert     string
+	GRPCTLSKey      string
 	Restore         bool
 	StoreInterval   int
 	FileStoragePath string
@@ -29,6 +31,8 @@ func NewConfig() Config {
 	flag.StringVar(&cfg.Address, "a", "localhost:8080", "server endpoint")
 	flag.StringVar(&cfg.Transport, "transport", HTTP, "metrics transport: http or grpc")
 	flag.StringVar(&cfg.GRPCAddress, "grpc-address", DefaultGRPCAddress, "gRPC server endpoint")
+	flag.StringVar(&cfg.GRPCTLSCert, "grpc-tls-cert", "", "path to the gRPC server TLS certificate")
+	flag.StringVar(&cfg.GRPCTLSKey, "grpc-tls-key", "", "path to the gRPC server TLS private key")
 	flag.IntVar(&cfg.StoreInterval, "i", 300, "metric collection to file interval")
 	flag.StringVar(&cfg.FileStoragePath, "f", "./tmp/temporary.json", "file memRepository path")
 	flag.BoolVar(&cfg.Restore, "r", false, "restore metrics from file")
@@ -55,6 +59,12 @@ func NewConfig() Config {
 	}
 	if fileCfg.GRPCAddress != nil && !explicit["grpc-address"] {
 		cfg.GRPCAddress = *fileCfg.GRPCAddress
+	}
+	if fileCfg.GRPCTLSCert != nil && !explicit["grpc-tls-cert"] {
+		cfg.GRPCTLSCert = *fileCfg.GRPCTLSCert
+	}
+	if fileCfg.GRPCTLSKey != nil && !explicit["grpc-tls-key"] {
+		cfg.GRPCTLSKey = *fileCfg.GRPCTLSKey
 	}
 	if fileCfg.Address != nil && !explicit["a"] {
 		cfg.Address = *fileCfg.Address
@@ -95,6 +105,12 @@ func NewConfig() Config {
 	}
 	if value, ok := os.LookupEnv("GRPC_ADDRESS"); ok {
 		cfg.GRPCAddress = value
+	}
+	if value, ok := os.LookupEnv("GRPC_TLS_CERT"); ok {
+		cfg.GRPCTLSCert = value
+	}
+	if value, ok := os.LookupEnv("GRPC_TLS_KEY"); ok {
+		cfg.GRPCTLSKey = value
 	}
 
 	if envStoreInterval, ok := os.LookupEnv("STORE_INTERVAL"); ok {

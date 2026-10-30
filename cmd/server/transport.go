@@ -29,7 +29,7 @@ func newMetricsServer(cfg config.Config, logger *zap.SugaredLogger, metrics *ser
 		return nil, err
 	}
 	if cfg.Transport == config.GRPC {
-		return newGRPCMetricsServer(cfg.GRPCAddress, cfg.TrustedSubnet, updatebatch.NewGRPCHandler(metrics, logger))
+		return newGRPCMetricsServer(cfg.GRPCAddress, cfg.TrustedSubnet, cfg.GRPCTLSCert, cfg.GRPCTLSKey, updatebatch.NewGRPCHandler(metrics, logger))
 	}
 	var decryptor *crypto.Decryptor
 	if cfg.CryptoKey != "" {

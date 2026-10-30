@@ -23,6 +23,7 @@ func TestServerStartsOnlySelectedTransport(t *testing.T) {
 			if transport == config.HTTP {
 				cfg.GRPCAddress = occupied.Addr().String()
 			} else {
+				cfg.GRPCTLSCert, cfg.GRPCTLSKey = testTLSFiles(t)
 				cfg.Address = occupied.Addr().String()
 				cfg.CryptoKey = "absent-http-only-key.pem"
 			}
@@ -45,6 +46,7 @@ func TestServerRejectsInvalidConfigurationAndOccupiedPort(t *testing.T) {
 	occupied, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	defer occupied.Close()
+	certFile, keyFile := testTLSFiles(t)
 	for _, cfg := range []config.Config{
 		{Transport: "unknown"},
 		{Transport: config.GRPC, GRPCAddress: "127.0.0.1:0", TrustedSubnet: "bad"},
@@ -52,6 +54,7 @@ func TestServerRejectsInvalidConfigurationAndOccupiedPort(t *testing.T) {
 		{Transport: config.GRPC, GRPCAddress: occupied.Addr().String()},
 		{Transport: config.HTTP, Address: occupied.Addr().String()},
 	} {
+		cfg.GRPCTLSCert, cfg.GRPCTLSKey = certFile, keyFile
 		_, err := newMetricsServer(cfg, zap.NewNop().Sugar(), service.NewMetricsService(nil), nil, nil, nil)
 		require.Error(t, err)
 	}

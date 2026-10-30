@@ -31,6 +31,7 @@ type Config struct {
 	Address        string `env:"ADDRESS"`
 	Transport      string `env:"TRANSPORT"`
 	GRPCAddress    string `env:"GRPC_ADDRESS"`
+	GRPCTLSCert    string `env:"GRPC_TLS_CERT"`
 	PollInterval   int    `env:"POLL_INTERVAL"`
 	ReportInterval int    `env:"REPORT_INTERVAL"`
 	HashSecret     string `env:"KEY"`
@@ -48,6 +49,7 @@ func loadConfig() (Config, error) {
 	var address string
 	var transport string
 	var grpcAddress string
+	var grpcTLSCert string
 	var pollInterval int
 	var reportInterval int
 	var hashSecret string
@@ -57,6 +59,7 @@ func loadConfig() (Config, error) {
 	flag.StringVar(&address, "a", "localhost:8080", "agent address url")
 	flag.StringVar(&transport, "transport", config.HTTP, "metrics transport: http or grpc")
 	flag.StringVar(&grpcAddress, "grpc-address", config.DefaultGRPCAddress, "gRPC server endpoint")
+	flag.StringVar(&grpcTLSCert, "grpc-tls-cert", "", "path to trusted gRPC TLS certificates")
 	flag.IntVar(&pollInterval, "p", 2, "poll interval in seconds")
 	flag.IntVar(&reportInterval, "r", 10, "report interval in seconds")
 	flag.StringVar(&hashSecret, "k", "", "hash secret for sending metrics")
@@ -79,6 +82,9 @@ func loadConfig() (Config, error) {
 	}
 	if fileCfg.GRPCAddress != nil && !explicit["grpc-address"] {
 		grpcAddress = *fileCfg.GRPCAddress
+	}
+	if fileCfg.GRPCTLSCert != nil && !explicit["grpc-tls-cert"] {
+		grpcTLSCert = *fileCfg.GRPCTLSCert
 	}
 	if fileCfg.Address != nil && !explicit["a"] {
 		address = *fileCfg.Address
@@ -108,6 +114,9 @@ func loadConfig() (Config, error) {
 	if cfg.GRPCAddress != "" {
 		grpcAddress = cfg.GRPCAddress
 	}
+	if cfg.GRPCTLSCert != "" {
+		grpcTLSCert = cfg.GRPCTLSCert
+	}
 	if cfg.PollInterval != 0 {
 		pollInterval = cfg.PollInterval
 	}
@@ -125,7 +134,7 @@ func loadConfig() (Config, error) {
 		rateLimit = cfg.RateLimit
 	}
 
-	return Config{Address: address, Transport: transport, GRPCAddress: grpcAddress,
+	return Config{Address: address, Transport: transport, GRPCAddress: grpcAddress, GRPCTLSCert: grpcTLSCert,
 		PollInterval: pollInterval, ReportInterval: reportInterval,
 		HashSecret: hashSecret, CryptoKey: cryptoKey, RateLimit: rateLimit}, nil
 }
@@ -154,7 +163,7 @@ func main() {
 		if cfg.GRPCAddress == "" {
 			log.Fatal("gRPC address must not be empty")
 		}
-		sender, err := agent.NewGRPCSender(cfg.GRPCAddress)
+		sender, err := agent.NewGRPCSender(cfg.GRPCAddress, cfg.GRPCTLSCert)
 		if err != nil {
 			log.Fatal(err)
 		}

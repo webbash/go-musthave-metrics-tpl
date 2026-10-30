@@ -3,33 +3,43 @@ package agent
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 // AuthInfo belongs to one transport, so reconnecting never replaces another
 // in-flight RPC's local address. No mutable IP is shared between workers.
 type localIPAuth struct {
-	credentials.CommonAuthInfo
+	credentials.TLSInfo
 	ip string
 }
-
-func (localIPAuth) AuthType() string { return "insecure" }
 
 type localIPTransport struct {
 	credentials.TransportCredentials
 }
 
-func newLocalIPTransport() credentials.TransportCredentials {
-	return localIPTransport{TransportCredentials: insecure.NewCredentials()}
+func newLocalIPTransport(certFile string) (credentials.TransportCredentials, error) {
+	if certFile == "" {
+		return nil, errors.New("gRPC TLS certificate is required")
+	}
+	tlsCredentials, err := credentials.NewClientTLSFromFile(certFile, "")
+	if err != nil {
+		return nil, fmt.Errorf("load gRPC TLS certificate: %w", err)
+	}
+	return localIPTransport{TransportCredentials: tlsCredentials}, nil
 }
 
 func (c localIPTransport) ClientHandshake(ctx context.Context, authority string, raw net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	conn, _, err := c.TransportCredentials.ClientHandshake(ctx, authority, raw)
+	conn, auth, err := c.TransportCredentials.ClientHandshake(ctx, authority, raw)
 	if err != nil {
 		return nil, nil, err
+	}
+	tlsInfo, ok := auth.(credentials.TLSInfo)
+	if !ok {
+		_ = conn.Close()
+		return nil, nil, errors.New("gRPC connection has no TLS information")
 	}
 	address, ok := conn.LocalAddr().(*net.TCPAddr)
 	if !ok || address.IP == nil {
@@ -37,8 +47,8 @@ func (c localIPTransport) ClientHandshake(ctx context.Context, authority string,
 		return nil, nil, errors.New("gRPC connection has no local TCP IP")
 	}
 	return conn, localIPAuth{
-		CommonAuthInfo: credentials.CommonAuthInfo{SecurityLevel: credentials.NoSecurity},
-		ip:             address.IP.String(),
+		TLSInfo: tlsInfo,
+		ip:      address.IP.String(),
 	}, nil
 }
 
@@ -48,7 +58,7 @@ func (c localIPTransport) Clone() credentials.TransportCredentials {
 
 type localIPMetadata struct{}
 
-func (localIPMetadata) RequireTransportSecurity() bool { return false }
+func (localIPMetadata) RequireTransportSecurity() bool { return true }
 
 func (localIPMetadata) GetRequestMetadata(ctx context.Context, _ ...string) (map[string]string, error) {
 	request, ok := credentials.RequestInfoFromContext(ctx)
