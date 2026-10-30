@@ -8,7 +8,7 @@ proto:
 	GOBIN=$(PROTO_TOOLS) go install google.golang.org/protobuf/cmd/protoc-gen-go@$(PROTOC_GEN_GO_VERSION)
 	GOBIN=$(PROTO_TOOLS) go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@$(PROTOC_GEN_GO_GRPC_VERSION)
 	$(PROTOC) --plugin=protoc-gen-go=$(PROTO_TOOLS)/protoc-gen-go --plugin=protoc-gen-go-grpc=$(PROTO_TOOLS)/protoc-gen-go-grpc \
-		--go_out=. --go_opt=module=github.com/webbash/go-musthave-metrics-tpl.git \
+		--go_out=. --go_opt=module=github.com/webbash/go-musthave-metrics-tpl.git --go_opt=default_api_level=API_OPAQUE \
 		--go-grpc_out=. --go-grpc_opt=module=github.com/webbash/go-musthave-metrics-tpl.git api/metrics.proto
 
 # Local development only. Private keys stay in the ignored tmp directory.

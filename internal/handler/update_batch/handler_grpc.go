@@ -31,18 +31,18 @@ func (h *GRPCHandler) UpdateMetrics(ctx context.Context, request *pb.UpdateMetri
 	if request == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	metrics := make([]models.Metrics, 0, len(request.Metrics))
-	for _, metric := range request.Metrics {
-		if metric == nil || metric.Id == "" {
+	metrics := make([]models.Metrics, 0, len(request.GetMetrics()))
+	for _, metric := range request.GetMetrics() {
+		if metric == nil || metric.GetId() == "" {
 			return nil, status.Error(codes.InvalidArgument, "metric name is required")
 		}
-		value := models.Metrics{ID: metric.Id}
-		switch metric.Type {
+		value := models.Metrics{ID: metric.GetId()}
+		switch metric.GetType() {
 		case pb.Metric_COUNTER:
-			delta := metric.Delta
+			delta := metric.GetDelta()
 			value.MType, value.Delta = models.Counter, &delta
 		case pb.Metric_GAUGE:
-			gauge := metric.Value
+			gauge := metric.GetValue()
 			value.MType, value.Value = models.Gauge, &gauge
 		default:
 			return nil, status.Error(codes.InvalidArgument, "unknown metric type")

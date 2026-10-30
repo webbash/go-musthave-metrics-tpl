@@ -26,9 +26,14 @@ func TestGRPCHandlerValidatesWholeBatchBeforeSaving(t *testing.T) {
 		request *pb.UpdateMetricsRequest
 	}{
 		{"nil request", nil},
-		{"nil metric", &pb.UpdateMetricsRequest{Metrics: []*pb.Metric{nil}}},
-		{"empty name", &pb.UpdateMetricsRequest{Metrics: []*pb.Metric{{Id: "valid"}, {}}}},
-		{"unknown type", &pb.UpdateMetricsRequest{Metrics: []*pb.Metric{{Id: "valid"}, {Id: "invalid", Type: pb.Metric_MType(99)}}}},
+		{"nil metric", pb.UpdateMetricsRequest_builder{Metrics: []*pb.Metric{nil}}.Build()},
+		{"empty name", pb.UpdateMetricsRequest_builder{Metrics: []*pb.Metric{
+			pb.Metric_builder{Id: "valid"}.Build(), {},
+		}}.Build()},
+		{"unknown type", pb.UpdateMetricsRequest_builder{Metrics: []*pb.Metric{
+			pb.Metric_builder{Id: "valid"}.Build(),
+			pb.Metric_builder{Id: "invalid", Type: pb.Metric_MType(99)}.Build(),
+		}}.Build()},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			calls := 0
@@ -43,10 +48,10 @@ func TestGRPCHandlerValidatesWholeBatchBeforeSaving(t *testing.T) {
 func TestGRPCHandlerPreservesZeroValuesAndMetricTypes(t *testing.T) {
 	var got []models.Metrics
 	h := NewGRPCHandler(updateFunc(func(_ context.Context, metrics []models.Metrics) error { got = metrics; return nil }), zap.NewNop().Sugar())
-	_, err := h.UpdateMetrics(t.Context(), &pb.UpdateMetricsRequest{Metrics: []*pb.Metric{
-		{Id: "gauge", Delta: 99}, // Default enum is GAUGE; irrelevant delta is ignored.
-		{Id: "counter", Type: pb.Metric_COUNTER, Value: 99},
-	}})
+	_, err := h.UpdateMetrics(t.Context(), pb.UpdateMetricsRequest_builder{Metrics: []*pb.Metric{
+		pb.Metric_builder{Id: "gauge", Delta: 99}.Build(), // Default enum is GAUGE; irrelevant delta is ignored.
+		pb.Metric_builder{Id: "counter", Type: pb.Metric_COUNTER, Value: 99}.Build(),
+	}}.Build())
 	require.NoError(t, err)
 	require.Len(t, got, 2)
 	require.Equal(t, models.Gauge, got[0].MType)
@@ -80,7 +85,9 @@ func TestGRPCHandlerMapsServiceErrors(t *testing.T) {
 	} {
 		t.Run(tc.code.String(), func(t *testing.T) {
 			h := NewGRPCHandler(updateFunc(func(context.Context, []models.Metrics) error { return tc.err }), zap.NewNop().Sugar())
-			_, err := h.UpdateMetrics(t.Context(), &pb.UpdateMetricsRequest{Metrics: []*pb.Metric{{Id: "metric"}}})
+			_, err := h.UpdateMetrics(t.Context(), pb.UpdateMetricsRequest_builder{Metrics: []*pb.Metric{
+				pb.Metric_builder{Id: "metric"}.Build(),
+			}}.Build())
 			require.Equal(t, tc.code, status.Code(err))
 			require.NotContains(t, err.Error(), "password")
 		})

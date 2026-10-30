@@ -144,7 +144,9 @@ func TestSubnetRejectsRPCBeforeService(t *testing.T) {
 		return nil
 	}))
 	client := newClient(t, s)
-	_, err := client.UpdateMetrics(t.Context(), &pb.UpdateMetricsRequest{Metrics: []*pb.Metric{{Id: "metric"}}})
+	_, err := client.UpdateMetrics(t.Context(), pb.UpdateMetricsRequest_builder{Metrics: []*pb.Metric{
+		pb.Metric_builder{Id: "metric"}.Build(),
+	}}.Build())
 	require.Equal(t, codes.PermissionDenied, status.Code(err))
 }
 
@@ -169,7 +171,9 @@ func TestShutdownFinishesOrCancelsActiveWrite(t *testing.T) {
 			client := newClient(t, s)
 			rpcDone := make(chan error, 1)
 			go func() {
-				_, err := client.UpdateMetrics(t.Context(), &pb.UpdateMetricsRequest{Metrics: []*pb.Metric{{Id: "metric"}}})
+				_, err := client.UpdateMetrics(t.Context(), pb.UpdateMetricsRequest_builder{Metrics: []*pb.Metric{
+					pb.Metric_builder{Id: "metric"}.Build(),
+				}}.Build())
 				rpcDone <- err
 			}()
 			select {
@@ -243,17 +247,18 @@ func TestPostgresRoundTrip(t *testing.T) {
 	require.Zero(t, gauge)
 	client := newClient(t, s)
 	ctx := metadata.AppendToOutgoingContext(t.Context(), "x-real-ip", "127.0.0.1")
-	_, err = client.UpdateMetrics(ctx, &pb.UpdateMetricsRequest{Metrics: []*pb.Metric{
-		{Id: "PollCount", Type: pb.Metric_COUNTER, Delta: 100}, {Id: "bad", Type: pb.Metric_MType(99)},
-	}})
+	_, err = client.UpdateMetrics(ctx, pb.UpdateMetricsRequest_builder{Metrics: []*pb.Metric{
+		pb.Metric_builder{Id: "PollCount", Type: pb.Metric_COUNTER, Delta: 100}.Build(),
+		pb.Metric_builder{Id: "bad", Type: pb.Metric_MType(99)}.Build(),
+	}}.Build())
 	require.Equal(t, codes.InvalidArgument, status.Code(err))
 	counter, err = repo.GetCounter(t.Context(), "PollCount")
 	require.NoError(t, err)
 	require.EqualValues(t, 10, counter, "invalid batch must not partially update PostgreSQL")
-	_, err = client.UpdateMetrics(ctx, &pb.UpdateMetricsRequest{Metrics: []*pb.Metric{
-		{Id: "PollCount", Type: pb.Metric_COUNTER, Delta: 100},
-		{Id: strings.Repeat("x", 201), Type: pb.Metric_GAUGE, Value: 1},
-	}})
+	_, err = client.UpdateMetrics(ctx, pb.UpdateMetricsRequest_builder{Metrics: []*pb.Metric{
+		pb.Metric_builder{Id: "PollCount", Type: pb.Metric_COUNTER, Delta: 100}.Build(),
+		pb.Metric_builder{Id: strings.Repeat("x", 201), Type: pb.Metric_GAUGE, Value: 1}.Build(),
+	}}.Build())
 	require.Equal(t, codes.Internal, status.Code(err))
 	counter, err = repo.GetCounter(t.Context(), "PollCount")
 	require.NoError(t, err)

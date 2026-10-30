@@ -42,27 +42,30 @@ func (s *GRPCSender) Close() error { return s.conn.Close() }
 
 // Send preserves the batch across retries and only retries Unavailable.
 func (s *GRPCSender) Send(ctx context.Context, metrics []models.Metrics) error {
-	request := &pb.UpdateMetricsRequest{Metrics: make([]*pb.Metric, 0, len(metrics))}
+	batch := make([]*pb.Metric, 0, len(metrics))
 	for _, metric := range metrics {
-		value := &pb.Metric{Id: metric.ID}
+		value := &pb.Metric{}
+		value.SetId(metric.ID)
 		switch metric.MType {
 		case models.Counter:
 			if metric.Delta == nil {
 				return fmt.Errorf("counter %q has no delta", metric.ID)
 			}
-			value.Type = pb.Metric_COUNTER
-			value.Delta = *metric.Delta
+			value.SetType(pb.Metric_COUNTER)
+			value.SetDelta(*metric.Delta)
 		case models.Gauge:
 			if metric.Value == nil {
 				return fmt.Errorf("gauge %q has no value", metric.ID)
 			}
-			value.Type = pb.Metric_GAUGE
-			value.Value = *metric.Value
+			value.SetType(pb.Metric_GAUGE)
+			value.SetValue(*metric.Value)
 		default:
 			return fmt.Errorf("unknown metric type %q", metric.MType)
 		}
-		request.Metrics = append(request.Metrics, value)
+		batch = append(batch, value)
 	}
+	request := &pb.UpdateMetricsRequest{}
+	request.SetMetrics(batch)
 	err := retry.Do(ctx, func() error {
 		attemptCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
