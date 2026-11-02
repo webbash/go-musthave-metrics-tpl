@@ -9,6 +9,10 @@ import (
 
 // ServerFile JSON fields are pointers so omitted values differ from false, 0 and "".
 type ServerFile struct {
+	Transport     *string  `json:"transport"`
+	GRPCAddress   *string  `json:"grpc_address"`
+	GRPCTLSCert   *string  `json:"grpc_tls_cert"`
+	GRPCTLSKey    *string  `json:"grpc_tls_key"`
 	Address       *string  `json:"address"`
 	Restore       *bool    `json:"restore"`
 	StoreInterval *Seconds `json:"store_interval"`
@@ -18,9 +22,13 @@ type ServerFile struct {
 	CryptoKey     *string  `json:"crypto_key"`
 	AuditFile     *string  `json:"audit_file"`
 	AuditURL      *string  `json:"audit_url"`
+	TrustedSubnet *string  `json:"trusted_subnet"`
 }
 
 type AgentFile struct {
+	Transport      *string  `json:"transport"`
+	GRPCAddress    *string  `json:"grpc_address"`
+	GRPCTLSCert    *string  `json:"grpc_tls_cert"`
 	Address        *string  `json:"address"`
 	PollInterval   *Seconds `json:"poll_interval"`
 	ReportInterval *Seconds `json:"report_interval"`

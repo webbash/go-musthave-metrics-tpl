@@ -15,11 +15,9 @@ import (
 	"github.com/pressly/goose/v3"
 	"go.uber.org/zap"
 
-	"github.com/webbash/go-musthave-metrics-tpl.git/internal"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/audit"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/config"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/config/db"
-	"github.com/webbash/go-musthave-metrics-tpl.git/internal/crypto"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/logger"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/repository"
 	"github.com/webbash/go-musthave-metrics-tpl.git/internal/service"
@@ -39,32 +37,43 @@ func main() {
 
 	cfg := config.NewConfig()
 	sugar := logger.NewLogger()
+	if err := runServer(cfg, sugar); err != nil {
+		sugar.Fatalw("server failed", "err", err)
+	}
+	_ = sugar.Sync()
+}
+
+func runServer(cfg config.Config, sugar *zap.SugaredLogger) error {
+	if err := config.ValidateTransport(cfg.Transport); err != nil {
+		return err
+	}
 
 	var database *sql.DB
 	if cfg.DatabaseDSN != "" {
 		var err error
 		database, err = db.NewPGConnector(cfg.DatabaseDSN).Connect()
 		if err != nil {
-			sugar.Fatalw("failed to connect to database", "err", err)
+			return fmt.Errorf("connect to database: %w", err)
 		}
+		defer database.Close()
 
 		err = goose.SetDialect("postgres")
 		if err != nil {
-			sugar.Fatalw("failed to set sql dialect", "err", err)
+			return fmt.Errorf("set SQL dialect: %w", err)
 		}
 
 		err = goose.Up(database, "migrations")
 		if err != nil {
-			sugar.Fatalw("failed to run migrations", "err", err)
+			return fmt.Errorf("run migrations: %w", err)
 		}
 
-		defer database.Close()
 	}
 
 	auditCtx, cancelAudit := context.WithCancel(context.Background())
 	defer cancelAudit()
 	obsSubject := audit.NewSubject(auditCtx, sugar)
-	if cfg.AuditFile != "" {
+	defer obsSubject.Close()
+	if cfg.Transport == config.HTTP && cfg.AuditFile != "" {
 		file, err := os.OpenFile(
 			cfg.AuditFile,
 			os.O_CREATE|os.O_WRONLY|os.O_APPEND,
@@ -79,7 +88,7 @@ func main() {
 		}
 	}
 
-	if cfg.AuditURL != "" {
+	if cfg.Transport == config.HTTP && cfg.AuditURL != "" {
 		httpObserver := audit.NewHTTPObserver(cfg.AuditURL)
 		obsSubject.AddObserver(httpObserver)
 	}
@@ -88,31 +97,16 @@ func main() {
 	repo := buildRepository(cfg, sugar, fileStorage, database)
 	metricsService := service.NewMetricsService(repo)
 
-	var decryptor *crypto.Decryptor
-	if cfg.CryptoKey != "" {
-		privateKey, err := crypto.LoadPrivateKey(cfg.CryptoKey)
-		if err != nil {
-			sugar.Fatalw("failed to load private crypto key", "err", err)
-		}
-		decryptor = crypto.NewDecryptor(privateKey)
-	}
-
-	r := internal.NewRouter(cfg, sugar, metricsService, repo, database, obsSubject, decryptor).Init()
-
-	srv := &http.Server{
-		Addr:         cfg.Address,
-		Handler:      r,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
-		IdleTimeout:  120 * time.Second,
+	srv, err := newMetricsServer(cfg, sugar, metricsService, repo, database, obsSubject)
+	if err != nil {
+		return err
 	}
 
 	// Graceful start
+	serveErrors := make(chan error, 1)
 	go func() {
-		sugar.Infow("starting server", "addr", cfg.Address)
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			sugar.Errorw("server closed", "err", err)
-		}
+		sugar.Infow("starting metrics server", "transport", cfg.Transport, "http_addr", cfg.Address, "grpc_addr", cfg.GRPCAddress)
+		serveErrors <- srv.Serve()
 	}()
 
 	go func() {
@@ -155,16 +149,20 @@ func main() {
 	// Graceful shutdown
 	signalCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	defer stop()
-	<-signalCtx.Done()
+	var serveErr error
+	select {
+	case <-signalCtx.Done():
+	case serveErr = <-serveErrors:
+		if serveErr == nil {
+			serveErr = errors.New("metrics server stopped unexpectedly")
+		}
+	}
 	sugar.Infow("shutting down server")
 	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancelShutdown()
 	shutdownErr := srv.Shutdown(shutdownCtx)
 	if shutdownErr != nil {
 		sugar.Errorw("failed to shut down server", "err", shutdownErr)
-		if err := srv.Close(); err != nil {
-			sugar.Errorw("failed to close server connections", "err", err)
-		}
 	}
 
 	// Дожидаемся текущей записи, чтобы она не перезаписала финальный снимок.
@@ -186,11 +184,12 @@ func main() {
 
 	obsSubject.Close()
 	cancelAudit()
-	if shutdownErr != nil || saveErr != nil {
-		return
+	if err := errors.Join(serveErr, shutdownErr, saveErr); err != nil {
+		return err
 	}
 
 	sugar.Infow("server stopped gracefully")
+	return nil
 }
 
 func buildRepository(

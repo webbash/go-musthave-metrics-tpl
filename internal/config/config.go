@@ -10,6 +10,10 @@ import (
 
 type Config struct {
 	Address         string
+	Transport       string
+	GRPCAddress     string
+	GRPCTLSCert     string
+	GRPCTLSKey      string
 	Restore         bool
 	StoreInterval   int
 	FileStoragePath string
@@ -18,12 +22,17 @@ type Config struct {
 	CryptoKey       string
 	AuditFile       string
 	AuditURL        string
+	TrustedSubnet   string
 }
 
 func NewConfig() Config {
 	cfg := Config{}
 
 	flag.StringVar(&cfg.Address, "a", "localhost:8080", "server endpoint")
+	flag.StringVar(&cfg.Transport, "transport", HTTP, "metrics transport: http or grpc")
+	flag.StringVar(&cfg.GRPCAddress, "grpc-address", DefaultGRPCAddress, "gRPC server endpoint")
+	flag.StringVar(&cfg.GRPCTLSCert, "grpc-tls-cert", "", "path to the gRPC server TLS certificate")
+	flag.StringVar(&cfg.GRPCTLSKey, "grpc-tls-key", "", "path to the gRPC server TLS private key")
 	flag.IntVar(&cfg.StoreInterval, "i", 300, "metric collection to file interval")
 	flag.StringVar(&cfg.FileStoragePath, "f", "./tmp/temporary.json", "file memRepository path")
 	flag.BoolVar(&cfg.Restore, "r", false, "restore metrics from file")
@@ -32,6 +41,7 @@ func NewConfig() Config {
 	flag.StringVar(&cfg.CryptoKey, "crypto-key", "", "path to the server private key")
 	flag.StringVar(&cfg.AuditFile, "audit-file", "", "Path to file for audit")
 	flag.StringVar(&cfg.AuditURL, "audit-url", "", "Url for audit")
+	flag.StringVar(&cfg.TrustedSubnet, "t", "", "trusted agent subnet in CIDR notation")
 
 	var configPath string
 	flag.StringVar(&configPath, "c", "", "path to JSON configuration")
@@ -44,6 +54,18 @@ func NewConfig() Config {
 	}
 	explicit := make(map[string]bool)
 	flag.Visit(func(f *flag.Flag) { explicit[f.Name] = true })
+	if fileCfg.Transport != nil && !explicit["transport"] {
+		cfg.Transport = *fileCfg.Transport
+	}
+	if fileCfg.GRPCAddress != nil && !explicit["grpc-address"] {
+		cfg.GRPCAddress = *fileCfg.GRPCAddress
+	}
+	if fileCfg.GRPCTLSCert != nil && !explicit["grpc-tls-cert"] {
+		cfg.GRPCTLSCert = *fileCfg.GRPCTLSCert
+	}
+	if fileCfg.GRPCTLSKey != nil && !explicit["grpc-tls-key"] {
+		cfg.GRPCTLSKey = *fileCfg.GRPCTLSKey
+	}
 	if fileCfg.Address != nil && !explicit["a"] {
 		cfg.Address = *fileCfg.Address
 	}
@@ -71,9 +93,24 @@ func NewConfig() Config {
 	if fileCfg.AuditURL != nil && !explicit["audit-url"] {
 		cfg.AuditURL = *fileCfg.AuditURL
 	}
+	if fileCfg.TrustedSubnet != nil && !explicit["t"] {
+		cfg.TrustedSubnet = *fileCfg.TrustedSubnet
+	}
 
 	if envAddress, ok := os.LookupEnv("ADDRESS"); ok {
 		cfg.Address = envAddress
+	}
+	if value, ok := os.LookupEnv("TRANSPORT"); ok {
+		cfg.Transport = value
+	}
+	if value, ok := os.LookupEnv("GRPC_ADDRESS"); ok {
+		cfg.GRPCAddress = value
+	}
+	if value, ok := os.LookupEnv("GRPC_TLS_CERT"); ok {
+		cfg.GRPCTLSCert = value
+	}
+	if value, ok := os.LookupEnv("GRPC_TLS_KEY"); ok {
+		cfg.GRPCTLSKey = value
 	}
 
 	if envStoreInterval, ok := os.LookupEnv("STORE_INTERVAL"); ok {
@@ -110,6 +147,9 @@ func NewConfig() Config {
 
 	if envAuditURL, ok := os.LookupEnv("AUDIT_URL"); ok {
 		cfg.AuditURL = envAuditURL
+	}
+	if envTrustedSubnet, ok := os.LookupEnv("TRUSTED_SUBNET"); ok {
+		cfg.TrustedSubnet = envTrustedSubnet
 	}
 
 	return cfg
